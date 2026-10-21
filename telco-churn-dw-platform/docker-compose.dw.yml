@@ -1,0 +1,45 @@
+# Standalone, portable data warehouse: PostgreSQL (schemas, roles, raw seed,
+# legacy star schema) + dbt (staging -> marts -> OLAP). No other service needed.
+#
+#   make dw-up                     # build, start and run dbt
+#   make dw-package                # save images to dist/telco-churn-dw-<tag>.tar.gz
+#   docker load -i dist/...tar.gz  # on another machine, then:
+#   docker compose -f docker-compose.dw.yml up -d && docker compose -f docker-compose.dw.yml run --rm dbt-bootstrap
+name: telco-dw
+
+services:
+  dw-postgres:
+    build: { context: ., dockerfile: infra/db/postgres/Dockerfile }
+    image: telco/dw-postgres:${IMAGE_TAG:-dev}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DW_DB:-telco_churn_dw}
+      POSTGRES_USER: ${DW_SUPERUSER:-postgres}
+      POSTGRES_PASSWORD: ${DW_SUPERUSER_PASSWORD:?set DW_SUPERUSER_PASSWORD in .env}
+      DW_OWNER_PASSWORD: ${DW_OWNER_PASSWORD:?}
+      DW_INGEST_PASSWORD: ${DW_INGEST_PASSWORD:?}
+      DW_ANALYTICS_PASSWORD: ${DW_ANALYTICS_PASSWORD:?}
+      DW_META_PASSWORD: ${DW_META_PASSWORD:?}
+      DW_ML_PASSWORD: ${DW_ML_PASSWORD:?}
+    ports: ["${POSTGRES_PORT:-5432}:5432"]
+    volumes: [dw-data:/var/lib/postgresql]
+    shm_size: 256mb
+
+  dbt-bootstrap:
+    build: { context: ., dockerfile: transform/dbt_telco/Dockerfile }
+    image: telco/dbt:${IMAGE_TAG:-dev}
+    profiles: [tools]
+    environment:
+      DW_HOST: dw-postgres
+      DW_PORT: "5432"
+      DW_DB: ${DW_DB:-telco_churn_dw}
+      DW_OWNER_PASSWORD: ${DW_OWNER_PASSWORD:?}
+      DBT_TARGET_PATH: /dbt_artifacts/target
+    volumes: [dbt-artifacts:/dbt_artifacts]
+    command: ["bash", "-c", "dbt seed && dbt build && dbt docs generate && python /app/reconcile.py"]
+    depends_on:
+      dw-postgres: { condition: service_healthy }
+
+volumes:
+  dw-data: {}
+  dbt-artifacts: {}

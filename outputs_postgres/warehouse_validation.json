@@ -1,0 +1,79 @@
+{
+  "row_counts": {
+    "dim_customer": {
+      "actual": 7043,
+      "expected": 7043,
+      "pass": true
+    },
+    "dim_contract": {
+      "actual": 6,
+      "expected": 6,
+      "pass": true
+    },
+    "dim_service": {
+      "actual": 322,
+      "expected": 322,
+      "pass": true
+    },
+    "dim_payment": {
+      "actual": 4,
+      "expected": 4,
+      "pass": true
+    },
+    "dim_churn": {
+      "actual": 2,
+      "expected": 2,
+      "pass": true
+    },
+    "fact_customer_churn": {
+      "actual": 7043,
+      "expected": 7043,
+      "pass": true
+    }
+  },
+  "queries": {
+    "orphan_links": {
+      "description": "Fact rows with an invalid dimension link (expect 0)",
+      "columns": [
+        "invalid_links"
+      ],
+      "rows": [
+        [
+          0
+        ]
+      ]
+    },
+    "unique_customer_keys": {
+      "description": "Distinct customer keys in the fact table (expect 7043)",
+      "columns": [
+        "unique_customer_keys"
+      ],
+      "rows": [
+        [
+          7043
+        ]
+      ]
+    },
+    "churn_distribution": {
+      "description": "Churn distribution (expect No=5174 / 73.46%, Yes=1869 / 26.54%)",
+      "columns": [
+        "churn_label",
+        "customers",
+        "pct"
+      ],
+      "rows": [
+        [
+          "No",
+          5174,
+          73.46
+        ],
+        [
+          "Yes",
+          1869,
+          26.54
+        ]
+      ]
+    }
+  },
+  "all_row_counts_pass": true
+}

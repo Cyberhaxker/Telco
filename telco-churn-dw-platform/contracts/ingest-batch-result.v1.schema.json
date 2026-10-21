@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://telco.local/contracts/ingest-batch-result.v1.schema.json",
+  "title": "IngestBatchResult",
+  "type": "object",
+  "required": ["batch_id", "status", "accepted_count", "rejected_count", "errors", "conflicts"],
+  "properties": {
+    "batch_id":       { "type": "string", "format": "uuid" },
+    "status":         { "enum": ["RECEIVED", "VALIDATED", "PUBLISHED", "FAILED"] },
+    "outcome":        { "enum": ["ACCEPTED", "PARTIAL", "REJECTED"] },
+    "accepted_count": { "type": "integer", "minimum": 0 },
+    "rejected_count": { "type": "integer", "minimum": 0 },
+    "replayed":       { "type": "boolean", "description": "true when the Idempotency-Key was seen before and the original result is returned" },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["row", "field", "code", "message"],
+        "properties": {
+          "row": { "type": "integer", "minimum": 0 },
+          "field": { "type": "string" },
+          "code": { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    },
+    "conflicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["customer_id", "server_version", "client_version"],
+        "properties": {
+          "row": { "type": "integer" },
+          "customer_id": { "type": "string" },
+          "server_version": { "type": "integer" },
+          "client_version": { "type": "integer" },
+          "server_record": { "type": "object" }
+        }
+      }
+    }
+  }
+}

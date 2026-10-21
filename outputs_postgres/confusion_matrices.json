@@ -1,0 +1,26 @@
+{
+  "Logistic Regression": {
+    "TN": 926,
+    "FP": 109,
+    "FN": 165,
+    "TP": 209
+  },
+  "Decision Tree": {
+    "TN": 913,
+    "FP": 122,
+    "FN": 162,
+    "TP": 212
+  },
+  "Random Forest": {
+    "TN": 777,
+    "FP": 258,
+    "FN": 83,
+    "TP": 291
+  },
+  "Gradient Boosting": {
+    "TN": 943,
+    "FP": 92,
+    "FN": 182,
+    "TP": 192
+  }
+}

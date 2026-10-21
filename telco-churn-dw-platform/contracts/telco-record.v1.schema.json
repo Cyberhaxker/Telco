@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://telco.local/contracts/telco-record.v1.schema.json",
+  "title": "TelcoRecord",
+  "description": "One customer with their subscription and services. Shared by the PWA (pre-queue validation), ingestion-api and stream-consumer. Cross-field numeric rules that JSON Schema cannot express (total_charges >= monthly_charges when tenure > 0) are enforced in code on both sides.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "customer_id", "gender", "senior_citizen", "partner", "dependents", "tenure_months",
+    "phone_service", "multiple_lines", "internet_service", "online_security", "online_backup",
+    "device_protection", "tech_support", "streaming_tv", "streaming_movies", "contract_type",
+    "paperless_billing", "payment_method", "monthly_charges", "total_charges", "churned"
+  ],
+  "properties": {
+    "customer_id":       { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{2,19}$" },
+    "gender":            { "enum": ["Female", "Male"] },
+    "senior_citizen":    { "enum": [0, 1] },
+    "partner":           { "$ref": "#/$defs/yesNo" },
+    "dependents":        { "$ref": "#/$defs/yesNo" },
+    "tenure_months":     { "type": "integer", "minimum": 0, "maximum": 600 },
+    "phone_service":     { "$ref": "#/$defs/yesNo" },
+    "multiple_lines":    { "enum": ["Yes", "No", "No phone service"] },
+    "internet_service":  { "enum": ["DSL", "Fiber optic", "No"] },
+    "online_security":   { "$ref": "#/$defs/addon" },
+    "online_backup":     { "$ref": "#/$defs/addon" },
+    "device_protection": { "$ref": "#/$defs/addon" },
+    "tech_support":      { "$ref": "#/$defs/addon" },
+    "streaming_tv":      { "$ref": "#/$defs/addon" },
+    "streaming_movies":  { "$ref": "#/$defs/addon" },
+    "contract_type":     { "enum": ["Month-to-month", "One year", "Two year"] },
+    "paperless_billing": { "$ref": "#/$defs/yesNo" },
+    "payment_method":    { "enum": ["Electronic check", "Mailed check", "Bank transfer (automatic)", "Credit card (automatic)"] },
+    "monthly_charges":   { "type": "number", "exclusiveMinimum": 0, "maximum": 10000 },
+    "total_charges":     { "type": ["number", "null"], "minimum": 0, "maximum": 10000000 },
+    "churned":           { "type": "boolean" },
+    "version":           { "type": "integer", "minimum": 0, "description": "Server version the client last saw (optimistic locking). Omit or 0 for new customers." }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "phone_service": { "const": "No" } } },
+      "then": { "properties": { "multiple_lines": { "const": "No phone service" } } },
+      "else": { "properties": { "multiple_lines": { "enum": ["Yes", "No"] } } }
+    },
+    {
+      "if": { "properties": { "internet_service": { "const": "No" } } },
+      "then": { "properties": {
+        "online_security": { "const": "No internet service" }, "online_backup": { "const": "No internet service" },
+        "device_protection": { "const": "No internet service" }, "tech_support": { "const": "No internet service" },
+        "streaming_tv": { "const": "No internet service" }, "streaming_movies": { "const": "No internet service" } } },
+      "else": { "properties": {
+        "online_security": { "$ref": "#/$defs/yesNo" }, "online_backup": { "$ref": "#/$defs/yesNo" },
+        "device_protection": { "$ref": "#/$defs/yesNo" }, "tech_support": { "$ref": "#/$defs/yesNo" },
+        "streaming_tv": { "$ref": "#/$defs/yesNo" }, "streaming_movies": { "$ref": "#/$defs/yesNo" } } }
+    }
+  ],
+  "$defs": {
+    "yesNo": { "enum": ["Yes", "No"] },
+    "addon": { "enum": ["Yes", "No", "No internet service"] }
+  }
+}

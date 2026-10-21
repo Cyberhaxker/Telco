@@ -1,0 +1,17 @@
+pyproject.toml
+telco_common/__init__.py
+telco_common/app.py
+telco_common/auth.py
+telco_common/health.py
+telco_common/kafka.py
+telco_common/logging.py
+telco_common/pagination.py
+telco_common/problems.py
+telco_common/records.py
+telco_common/settings.py
+telco_common.egg-info/PKG-INFO
+telco_common.egg-info/SOURCES.txt
+telco_common.egg-info/dependency_links.txt
+telco_common.egg-info/requires.txt
+telco_common.egg-info/top_level.txt
+tests/test_records.py

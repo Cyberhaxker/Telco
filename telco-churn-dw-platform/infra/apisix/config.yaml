@@ -1,0 +1,50 @@
+# APISIX in standalone (declarative) mode: routes live in apisix.yaml, there is
+# no etcd and no Admin API, so the gateway config is fully version-controlled.
+deployment:
+  role: data_plane
+  role_data_plane:
+    config_provider: yaml
+
+apisix:
+  node_listen: 9080
+  enable_ipv6: false
+  show_upstream_status_in_response_header: false
+  proxy_cache:
+    cache_ttl: 60s
+    zones:
+      - name: disk_cache_one
+        memory_size: 16m
+        disk_size: 128m
+        disk_path: /tmp/disk_cache_one
+        cache_levels: "1:2"
+      - name: analytics_cache
+        memory_size: 32m
+  enable_server_tokens: false
+
+nginx_config:
+  error_log_level: warn
+  http:
+    enable_access_log: true
+    access_log_format: '{"time":"$time_iso8601","request_id":"$http_x_request_id","remote_addr":"$remote_addr","method":"$request_method","uri":"$uri","status":$status,"bytes":$body_bytes_sent,"request_time":$request_time,"upstream":"$upstream_addr","upstream_time":"$upstream_response_time","ua":"$http_user_agent"}'
+    access_log_format_escape: json
+    client_max_body_size: 12m
+
+plugins:
+  - real-ip
+  - request-id
+  - cors
+  - openid-connect
+  - limit-count
+  - client-control
+  - proxy-cache
+  - response-rewrite
+  - prometheus
+  - mocking
+  - proxy-rewrite
+
+plugin_attr:
+  prometheus:
+    export_uri: /apisix/prometheus/metrics
+    export_addr:
+      ip: 0.0.0.0
+      port: 9091

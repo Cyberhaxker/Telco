@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "telco-common"
+version = "1.0.0"
+description = "Shared settings, auth, logging, errors and record contracts for Telco platform services"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+dependencies = [
+  "fastapi>=0.115,<1",
+  "pydantic>=2.10,<3",
+  "pydantic-settings>=2.7,<3",
+  "pyjwt[crypto]>=2.10,<3",
+  "jsonschema>=4.23,<5",
+  "prometheus-fastapi-instrumentator>=7.0,<9",
+]
+
+[tool.setuptools.packages.find]
+include = ["telco_common*"]

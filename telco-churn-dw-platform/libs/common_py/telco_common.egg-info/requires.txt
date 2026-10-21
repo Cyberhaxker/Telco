@@ -1,0 +1,6 @@
+fastapi<1,>=0.115
+pydantic<3,>=2.10
+pydantic-settings<3,>=2.7
+pyjwt[crypto]<3,>=2.10
+jsonschema<5,>=4.23
+prometheus-fastapi-instrumentator<9,>=7.0

@@ -1,0 +1,1 @@
+/usr/pgsql-18/bin/postgres "-D" "/home/mamboc001dev_/Telco/.pgdata" "-p" "5433" "-k" "/home/mamboc001dev_/Telco/.pgdata"

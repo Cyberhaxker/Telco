@@ -1,0 +1,347 @@
+{
+  "project": {
+    "title": "Development of a Data Warehouse and Application of Data Mining Techniques for Customer Churn Analysis in the Telecommunications Sector",
+    "version": "1.0"
+  },
+  "source": {
+    "csv_path": "Telco-Customer-Churn.csv",
+    "expected_rows": 7043,
+    "expected_columns": 21,
+    "id_column": "customerID",
+    "target_column": "Churn",
+    "target_mapping": {
+      "No": 0,
+      "Yes": 1
+    },
+    "numeric_coerce": [
+      "TotalCharges"
+    ]
+  },
+  "mysql": {
+    "host": "localhost",
+    "port": 3306,
+    "user": "root",
+    "password_env": "MYSQL_PASSWORD",
+    "schema": "telco_churn_dw",
+    "drop_existing": true
+  },
+  "warehouse": {
+    "grain": "one fact row per customer",
+    "dimensions": [
+      {
+        "name": "dim_customer",
+        "key": "customer_key",
+        "natural_key": "customerID",
+        "ddl_columns": [
+          "customer_id VARCHAR(20) NOT NULL UNIQUE",
+          "gender VARCHAR(10) NOT NULL",
+          "senior_citizen TINYINT NOT NULL",
+          "partner VARCHAR(3) NOT NULL",
+          "dependents VARCHAR(3) NOT NULL"
+        ],
+        "source_columns": [
+          "customerID",
+          "gender",
+          "SeniorCitizen",
+          "Partner",
+          "Dependents"
+        ],
+        "target_columns": [
+          "customer_id",
+          "gender",
+          "senior_citizen",
+          "partner",
+          "dependents"
+        ],
+        "deduplicate": false
+      },
+      {
+        "name": "dim_contract",
+        "key": "contract_key",
+        "ddl_columns": [
+          "contract_type VARCHAR(20) NOT NULL",
+          "paperless_billing VARCHAR(3) NOT NULL",
+          "UNIQUE KEY uq_contract (contract_type, paperless_billing)"
+        ],
+        "source_columns": [
+          "Contract",
+          "PaperlessBilling"
+        ],
+        "target_columns": [
+          "contract_type",
+          "paperless_billing"
+        ],
+        "deduplicate": true
+      },
+      {
+        "name": "dim_service",
+        "key": "service_key",
+        "ddl_columns": [
+          "phone_service VARCHAR(3) NOT NULL",
+          "multiple_lines VARCHAR(20) NOT NULL",
+          "internet_service VARCHAR(20) NOT NULL",
+          "online_security VARCHAR(25) NOT NULL",
+          "online_backup VARCHAR(25) NOT NULL",
+          "device_protection VARCHAR(25) NOT NULL",
+          "tech_support VARCHAR(25) NOT NULL",
+          "streaming_tv VARCHAR(25) NOT NULL",
+          "streaming_movies VARCHAR(25) NOT NULL",
+          "UNIQUE KEY uq_service (phone_service, multiple_lines, internet_service, online_security, online_backup, device_protection, tech_support, streaming_tv, streaming_movies)"
+        ],
+        "source_columns": [
+          "PhoneService",
+          "MultipleLines",
+          "InternetService",
+          "OnlineSecurity",
+          "OnlineBackup",
+          "DeviceProtection",
+          "TechSupport",
+          "StreamingTV",
+          "StreamingMovies"
+        ],
+        "target_columns": [
+          "phone_service",
+          "multiple_lines",
+          "internet_service",
+          "online_security",
+          "online_backup",
+          "device_protection",
+          "tech_support",
+          "streaming_tv",
+          "streaming_movies"
+        ],
+        "deduplicate": true
+      },
+      {
+        "name": "dim_payment",
+        "key": "payment_key",
+        "ddl_columns": [
+          "payment_method VARCHAR(30) NOT NULL UNIQUE"
+        ],
+        "source_columns": [
+          "PaymentMethod"
+        ],
+        "target_columns": [
+          "payment_method"
+        ],
+        "deduplicate": true
+      },
+      {
+        "name": "dim_churn",
+        "key": "churn_key",
+        "ddl_columns": [
+          "churn_label VARCHAR(3) NOT NULL UNIQUE",
+          "churn_flag TINYINT NOT NULL"
+        ],
+        "source_columns": [
+          "Churn"
+        ],
+        "target_columns": [
+          "churn_label"
+        ],
+        "deduplicate": true,
+        "derived": {
+          "churn_flag": {
+            "from": "Churn",
+            "map": {
+              "No": 0,
+              "Yes": 1
+            }
+          }
+        }
+      }
+    ],
+    "fact": {
+      "name": "fact_customer_churn",
+      "key": "fact_key",
+      "foreign_keys": [
+        {
+          "column": "customer_key",
+          "references": "dim_customer"
+        },
+        {
+          "column": "contract_key",
+          "references": "dim_contract"
+        },
+        {
+          "column": "service_key",
+          "references": "dim_service"
+        },
+        {
+          "column": "payment_key",
+          "references": "dim_payment"
+        },
+        {
+          "column": "churn_key",
+          "references": "dim_churn"
+        }
+      ],
+      "measures": [
+        {
+          "name": "tenure",
+          "source": "tenure",
+          "ddl": "INT NOT NULL"
+        },
+        {
+          "name": "monthly_charges",
+          "source": "MonthlyCharges",
+          "ddl": "DECIMAL(10,2) NOT NULL"
+        },
+        {
+          "name": "total_charges",
+          "source": "TotalCharges",
+          "ddl": "DECIMAL(10,2) NULL"
+        }
+      ]
+    }
+  },
+  "validation": {
+    "expected_counts": {
+      "dim_customer": 7043,
+      "dim_contract": 6,
+      "dim_service": 322,
+      "dim_payment": 4,
+      "dim_churn": 2,
+      "fact_customer_churn": 7043
+    },
+    "queries": [
+      {
+        "id": "orphan_links",
+        "description": "Fact rows with an invalid dimension link (expect 0)",
+        "sql": "SELECT COUNT(*) AS invalid_links FROM fact_customer_churn f LEFT JOIN dim_customer c ON f.customer_key=c.customer_key LEFT JOIN dim_contract k ON f.contract_key=k.contract_key LEFT JOIN dim_service s ON f.service_key=s.service_key LEFT JOIN dim_payment p ON f.payment_key=p.payment_key LEFT JOIN dim_churn ch ON f.churn_key=ch.churn_key WHERE c.customer_key IS NULL OR k.contract_key IS NULL OR s.service_key IS NULL OR p.payment_key IS NULL OR ch.churn_key IS NULL"
+      },
+      {
+        "id": "unique_customer_keys",
+        "description": "Distinct customer keys in the fact table (expect 7043)",
+        "sql": "SELECT COUNT(DISTINCT customer_key) AS unique_customer_keys FROM fact_customer_churn"
+      },
+      {
+        "id": "churn_distribution",
+        "description": "Churn distribution (expect No=5174 / 73.46%, Yes=1869 / 26.54%)",
+        "sql": "SELECT ch.churn_label, COUNT(*) AS customers, ROUND(100*COUNT(*)/(SELECT COUNT(*) FROM fact_customer_churn),2) AS pct FROM fact_customer_churn f JOIN dim_churn ch ON f.churn_key=ch.churn_key GROUP BY ch.churn_label ORDER BY ch.churn_label"
+      }
+    ]
+  },
+  "analysis_queries": [
+    {
+      "id": "churn_by_contract",
+      "description": "Churn rate by contract type (expect Month-to-month 1655/3875=42.71%, One year 166/1473=11.27%, Two year 48/1695=2.83%)",
+      "sql": "SELECT k.contract_type, COUNT(*) AS customers, SUM(ch.churn_flag) AS churned, ROUND(100*SUM(ch.churn_flag)/COUNT(*),2) AS churn_rate_pct FROM fact_customer_churn f JOIN dim_contract k ON f.contract_key=k.contract_key JOIN dim_churn ch ON f.churn_key=ch.churn_key GROUP BY k.contract_type ORDER BY churn_rate_pct DESC"
+    },
+    {
+      "id": "churn_by_tenure_band",
+      "description": "Churn rate by tenure band (expect 0-12 months: 1037/2186=47.44%)",
+      "sql": "SELECT CASE WHEN f.tenure<=12 THEN '0-12' WHEN f.tenure<=24 THEN '13-24' WHEN f.tenure<=48 THEN '25-48' ELSE '49-72' END AS tenure_band, COUNT(*) AS customers, SUM(ch.churn_flag) AS churned, ROUND(100*SUM(ch.churn_flag)/COUNT(*),2) AS churn_rate_pct FROM fact_customer_churn f JOIN dim_churn ch ON f.churn_key=ch.churn_key GROUP BY tenure_band ORDER BY MIN(f.tenure)"
+    },
+    {
+      "id": "churn_by_payment_method",
+      "description": "Churn rate by payment method (expect Electronic check 1071/2365=45.29%)",
+      "sql": "SELECT p.payment_method, COUNT(*) AS customers, SUM(ch.churn_flag) AS churned, ROUND(100*SUM(ch.churn_flag)/COUNT(*),2) AS churn_rate_pct FROM fact_customer_churn f JOIN dim_payment p ON f.payment_key=p.payment_key JOIN dim_churn ch ON f.churn_key=ch.churn_key GROUP BY p.payment_method ORDER BY churn_rate_pct DESC"
+    },
+    {
+      "id": "month_to_month_electronic_check",
+      "description": "Combined segment (expect 994/1850=53.73%)",
+      "sql": "SELECT COUNT(*) AS customers, SUM(ch.churn_flag) AS churned, ROUND(100*SUM(ch.churn_flag)/COUNT(*),2) AS churn_rate_pct FROM fact_customer_churn f JOIN dim_contract k ON f.contract_key=k.contract_key JOIN dim_payment p ON f.payment_key=p.payment_key JOIN dim_churn ch ON f.churn_key=ch.churn_key WHERE k.contract_type='Month-to-month' AND p.payment_method='Electronic check'"
+    },
+    {
+      "id": "churn_by_internet_service",
+      "description": "Churn rate by internet service type",
+      "sql": "SELECT s.internet_service, COUNT(*) AS customers, SUM(ch.churn_flag) AS churned, ROUND(100*SUM(ch.churn_flag)/COUNT(*),2) AS churn_rate_pct FROM fact_customer_churn f JOIN dim_service s ON f.service_key=s.service_key JOIN dim_churn ch ON f.churn_key=ch.churn_key GROUP BY s.internet_service ORDER BY churn_rate_pct DESC"
+    },
+    {
+      "id": "avg_charges_by_churn",
+      "description": "Average monthly charges and tenure by churn label",
+      "sql": "SELECT ch.churn_label, ROUND(AVG(f.monthly_charges),2) AS avg_monthly_charges, ROUND(AVG(f.tenure),1) AS avg_tenure FROM fact_customer_churn f JOIN dim_churn ch ON f.churn_key=ch.churn_key GROUP BY ch.churn_label"
+    }
+  ],
+  "mining": {
+    "task": "supervised binary classification",
+    "test_size": 0.2,
+    "random_state": 42,
+    "stratify": true,
+    "drop_columns": [
+      "customerID"
+    ],
+    "preprocessing": {
+      "numeric": {
+        "imputer": "median",
+        "scaler": "standard"
+      },
+      "categorical": {
+        "imputer": "most_frequent",
+        "encoder": "onehot",
+        "handle_unknown": "ignore"
+      }
+    },
+    "models": [
+      {
+        "name": "Logistic Regression",
+        "class": "sklearn.linear_model.LogisticRegression",
+        "params": {
+          "max_iter": 1000,
+          "random_state": 42
+        }
+      },
+      {
+        "name": "Decision Tree",
+        "class": "sklearn.tree.DecisionTreeClassifier",
+        "params": {
+          "max_depth": 5,
+          "min_samples_leaf": 10,
+          "random_state": 42
+        }
+      },
+      {
+        "name": "Random Forest",
+        "class": "sklearn.ensemble.RandomForestClassifier",
+        "params": {
+          "n_estimators": 300,
+          "max_depth": 8,
+          "min_samples_leaf": 3,
+          "class_weight": "balanced_subsample",
+          "random_state": 42,
+          "n_jobs": -1
+        }
+      },
+      {
+        "name": "Gradient Boosting",
+        "class": "sklearn.ensemble.GradientBoostingClassifier",
+        "params": {
+          "n_estimators": 150,
+          "learning_rate": 0.05,
+          "max_depth": 3,
+          "random_state": 42
+        }
+      }
+    ],
+    "metrics": [
+      "accuracy",
+      "precision",
+      "recall",
+      "f1",
+      "roc_auc"
+    ],
+    "feature_importance": {
+      "model": "Random Forest",
+      "top_n": 15,
+      "permutation": {
+        "enabled": true,
+        "scoring": "roc_auc",
+        "n_repeats": 10
+      }
+    }
+  },
+  "outputs": {
+    "directory": "outputs",
+    "model_comparison_csv": "model_comparison.csv",
+    "confusion_matrices_json": "confusion_matrices.json",
+    "feature_importance_csv": "feature_importance_rf.csv",
+    "permutation_importance_csv": "permutation_importance_rf.csv",
+    "validation_json": "warehouse_validation.json",
+    "analysis_csv_prefix": "sql_",
+    "figures": {
+      "model_comparison_png": "model_comparison.png",
+      "feature_importance_png": "feature_importance_rf.png"
+    }
+  }
+}

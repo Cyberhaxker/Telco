@@ -1,0 +1,2 @@
+2026-10-21 14:01:56.344 CAT [52792] LOG:  redirecting log output to logging collector process
+2026-10-21 14:01:56.344 CAT [52792] HINT:  Future log output will appear in directory "log".

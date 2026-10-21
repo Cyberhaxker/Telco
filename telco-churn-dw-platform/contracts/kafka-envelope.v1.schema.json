@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://telco.local/contracts/kafka-envelope.v1.schema.json",
+  "title": "KafkaEnvelope",
+  "description": "Envelope for every message on ingest.*.v1, ingest.dlq.v1 and dw.events.v1. Keyed by customer_id on ingest topics.",
+  "type": "object",
+  "required": ["event_id", "event_type", "schema_version", "produced_at", "source", "payload"],
+  "properties": {
+    "event_id":       { "type": "string", "format": "uuid" },
+    "event_type":     { "enum": ["customer.upserted", "subscription.upserted", "record.rejected", "dw.refreshed", "model.promoted"] },
+    "schema_version": { "type": "string", "pattern": "^[0-9]+$" },
+    "batch_id":       { "type": ["string", "null"], "format": "uuid" },
+    "produced_at":    { "type": "string", "format": "date-time" },
+    "source":         { "type": "string" },
+    "payload":        { "type": "object" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "event_type": { "enum": ["customer.upserted", "subscription.upserted"] } } },
+      "then": { "properties": { "payload": { "$ref": "telco-record.v1.schema.json" } } }
+    }
+  ]
+}

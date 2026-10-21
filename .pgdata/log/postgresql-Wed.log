@@ -1,0 +1,41 @@
+2026-10-21 14:01:56.344 CAT [52792] LOG:  starting PostgreSQL 18.6 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2), 64-bit
+2026-10-21 14:01:56.348 CAT [52792] LOG:  listening on IPv6 address "::1", port 5433
+2026-10-21 14:01:56.348 CAT [52792] LOG:  listening on IPv4 address "127.0.0.1", port 5433
+2026-10-21 14:01:56.355 CAT [52792] LOG:  listening on Unix socket "/home/mamboc001dev_/Telco/.pgdata/.s.PGSQL.5433"
+2026-10-21 14:01:56.368 CAT [52799] LOG:  database system was shut down at 2026-10-21 14:01:45 CAT
+2026-10-21 14:01:56.378 CAT [52792] LOG:  database system is ready to accept connections
+2026-10-21 14:01:56.494 CAT [52803] FATAL:  role "mamboc001dev_" does not exist
+2026-10-21 14:10:56.372 CAT [52797] LOG:  checkpoint starting: time
+2026-10-21 14:10:59.881 CAT [52797] LOG:  checkpoint complete: wrote 34 buffers (0.2%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=3.424 s, sync=0.039 s, total=3.510 s; sync files=11, longest=0.005 s, average=0.004 s; distance=260 kB, estimate=260 kB; lsn=0/18049D0, redo lsn=0/1804978
+2026-10-21 14:48:10.962 CAT [52797] LOG:  checkpoint starting: time
+2026-10-21 14:49:49.490 CAT [52797] LOG:  checkpoint complete: wrote 979 buffers (6.0%), wrote 1 SLRU buffers; 1 WAL file(s) added, 0 removed, 0 recycled; write=97.990 s, sync=0.447 s, total=98.536 s; sync files=310, longest=0.008 s, average=0.002 s; distance=4610 kB, estimate=4610 kB; lsn=0/1CC2AA0, redo lsn=0/1C854D0
+2026-10-21 14:50:49.144 CAT [52797] LOG:  checkpoint starting: immediate force wait
+2026-10-21 14:50:49.174 CAT [52797] LOG:  checkpoint complete: wrote 1 buffers (0.0%), wrote 1 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=0.005 s, sync=0.009 s, total=0.031 s; sync files=2, longest=0.005 s, average=0.004 s; distance=245 kB, estimate=4174 kB; lsn=0/1CC2CB0, redo lsn=0/1CC2C58
+2026-10-21 14:52:18.552 CAT [52797] LOG:  checkpoint starting: immediate force wait
+2026-10-21 14:52:18.587 CAT [52797] LOG:  checkpoint complete: wrote 3 buffers (0.0%), wrote 1 SLRU buffers; 0 WAL file(s) added, 0 removed, 1 recycled; write=0.005 s, sync=0.012 s, total=0.035 s; sync files=4, longest=0.004 s, average=0.003 s; distance=8250 kB, estimate=8250 kB; lsn=0/24D1700, redo lsn=0/24D16A8
+2026-10-21 14:57:18.704 CAT [52797] LOG:  checkpoint starting: time
+2026-10-21 14:59:22.870 CAT [52797] LOG:  checkpoint complete: wrote 1237 buffers (7.6%), wrote 1 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=124.055 s, sync=0.083 s, total=124.176 s; sync files=330, longest=0.005 s, average=0.001 s; distance=8250 kB, estimate=8250 kB; lsn=0/2CE0270, redo lsn=0/2CE01E0
+2026-10-21 15:03:11.999 CAT [56188] FATAL:  database "teclo_churn_dw" does not exist
+2026-10-21 15:03:17.078 CAT [56190] FATAL:  database "teclo_churn_dw" does not exist
+2026-10-21 15:03:18.156 CAT [56192] FATAL:  database "teclo_churn_dw" does not exist
+2026-10-21 15:03:19.113 CAT [56194] FATAL:  database "teclo_churn_dw" does not exist
+2026-10-21 15:12:01.196 CAT [52797] LOG:  checkpoint starting: immediate force wait
+2026-10-21 15:12:01.315 CAT [52797] LOG:  checkpoint complete: wrote 1 buffers (0.0%), wrote 0 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=0.017 s, sync=0.038 s, total=0.120 s; sync files=1, longest=0.038 s, average=0.038 s; distance=1 kB, estimate=7425 kB; lsn=0/2CE0868, redo lsn=0/2CE0810
+2026-10-21 15:17:01.430 CAT [52797] LOG:  checkpoint starting: time
+2026-10-21 15:17:20.296 CAT [58520] FATAL:  database "teclo_churn_dw" does not exist
+2026-10-21 15:19:05.640 CAT [52797] LOG:  checkpoint complete: wrote 1237 buffers (7.6%), wrote 1 SLRU buffers; 0 WAL file(s) added, 0 removed, 1 recycled; write=124.161 s, sync=0.017 s, total=124.223 s; sync files=330, longest=0.004 s, average=0.001 s; distance=8250 kB, estimate=8250 kB; lsn=0/34EF400, redo lsn=0/34EF370
+2026-10-21 15:22:55.243 CAT [58690] FATAL:  database "teclo_churn_dw" does not exist
+2026-10-21 15:22:55.252 CAT [58691] FATAL:  database "teclo_churn_dw" does not exist
+2026-10-21 15:27:01.840 CAT [52797] LOG:  checkpoint starting: time
+2026-10-21 15:27:02.202 CAT [52797] LOG:  checkpoint complete: wrote 3 buffers (0.0%), wrote 1 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=0.313 s, sync=0.019 s, total=0.362 s; sync files=4, longest=0.006 s, average=0.005 s; distance=17 kB, estimate=7427 kB; lsn=0/34F3B40, redo lsn=0/34F3AE8
+2026-10-21 15:27:25.210 CAT [58609] FATAL:  terminating connection due to administrator command
+2026-10-21 15:27:25.317 CAT [52797] LOG:  checkpoint starting: immediate force wait
+2026-10-21 15:27:25.346 CAT [52797] LOG:  checkpoint complete: wrote 1 buffers (0.0%), wrote 0 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=0.005 s, sync=0.004 s, total=0.029 s; sync files=1, longest=0.004 s, average=0.004 s; distance=1 kB, estimate=6684 kB; lsn=0/34F41F8, redo lsn=0/34F41A0
+2026-10-21 15:32:25.463 CAT [52797] LOG:  checkpoint starting: time
+2026-10-21 15:33:10.741 CAT [60403] FATAL:  database "teclo_churn_dw" does not exist
+2026-10-21 15:33:23.899 CAT [60407] FATAL:  database "teclo_churn_dw" does not exist
+2026-10-21 15:34:29.956 CAT [52797] LOG:  checkpoint complete: wrote 1237 buffers (7.6%), wrote 1 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=124.155 s, sync=0.291 s, total=124.509 s; sync files=330, longest=0.005 s, average=0.001 s; distance=8250 kB, estimate=8250 kB; lsn=0/3D05820, redo lsn=0/3D02D90
+2026-10-21 15:42:26.157 CAT [52797] LOG:  checkpoint starting: time
+2026-10-21 15:42:28.413 CAT [52797] LOG:  checkpoint complete: wrote 22 buffers (0.1%), wrote 0 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=2.214 s, sync=0.022 s, total=2.256 s; sync files=6, longest=0.004 s, average=0.004 s; distance=163 kB, estimate=7442 kB; lsn=0/3D2BD80, redo lsn=0/3D2BD28
+2026-10-21 17:44:22.358 CAT [52797] LOG:  checkpoint starting: time
+2026-10-21 17:44:23.329 CAT [52797] LOG:  checkpoint complete: wrote 9 buffers (0.1%), wrote 0 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=0.919 s, sync=0.011 s, total=0.984 s; sync files=3, longest=0.005 s, average=0.004 s; distance=54 kB, estimate=6703 kB; lsn=0/3D398E8, redo lsn=0/3D39858

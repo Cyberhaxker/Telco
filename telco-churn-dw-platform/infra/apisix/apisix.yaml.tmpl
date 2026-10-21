@@ -1,0 +1,238 @@
+# Declarative APISIX routes. Dollar-brace placeholders are substituted from the container
+# environment by render-and-start.sh before APISIX starts.
+
+upstreams:
+  - id: metadata-api
+    type: roundrobin
+    scheme: http
+    nodes: { "metadata-api:8000": 1 }
+    timeout: { connect: 3, send: 30, read: 30 }
+    checks:
+      active:
+        type: http
+        http_path: /healthz
+        healthy: { interval: 10, successes: 1 }
+        unhealthy: { interval: 5, http_failures: 3 }
+  - id: ingestion-api
+    type: roundrobin
+    scheme: http
+    nodes: { "ingestion-api:8000": 1 }
+    timeout: { connect: 3, send: 60, read: 120 }
+    checks:
+      active:
+        type: http
+        http_path: /healthz
+        healthy: { interval: 10, successes: 1 }
+        unhealthy: { interval: 5, http_failures: 3 }
+  - id: analytics-api
+    type: roundrobin
+    scheme: http
+    nodes: { "analytics-api:8000": 1 }
+    timeout: { connect: 3, send: 30, read: 60 }
+    checks:
+      active:
+        type: http
+        http_path: /healthz
+        healthy: { interval: 10, successes: 1 }
+        unhealthy: { interval: 5, http_failures: 3 }
+
+global_rules:
+  - id: 1
+    plugins:
+      real-ip:
+        source: http_x_forwarded_for
+        trusted_addresses: ["127.0.0.1", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+        recursive: true
+      request-id:
+        header_name: X-Request-ID
+        include_in_response: true
+        algorithm: uuid
+      prometheus:
+        prefer_name: true
+      response-rewrite:
+        headers:
+          set:
+            X-Content-Type-Options: nosniff
+            X-Frame-Options: DENY
+            Referrer-Policy: strict-origin-when-cross-origin
+            Strict-Transport-Security: "max-age=63072000; includeSubDomains"
+            Cache-Control: "no-store"
+
+routes:
+  # ---------------------------------------------------------- unauthenticated
+  - id: gateway-health
+    uri: /healthz
+    methods: [GET]
+    plugins:
+      mocking:
+        response_status: 200
+        content_type: application/json
+        response_example: '{"status":"ok"}'
+
+  - id: openapi-docs-meta
+    uris: [/api/v1/meta/docs, /api/v1/meta/openapi.json]
+    methods: [GET]
+    priority: 10
+    plugins:
+      limit-count: { count: 60, time_window: 60, key_type: var, key: remote_addr, rejected_code: 429, policy: local }
+    upstream_id: metadata-api
+
+  - id: openapi-docs-ingest
+    uris: [/api/v1/ingest/docs, /api/v1/ingest/openapi.json]
+    methods: [GET]
+    priority: 10
+    plugins:
+      limit-count: { count: 60, time_window: 60, key_type: var, key: remote_addr, rejected_code: 429, policy: local }
+    upstream_id: ingestion-api
+
+  - id: openapi-docs-analytics
+    uris: [/api/v1/analytics/docs, /api/v1/analytics/openapi.json]
+    methods: [GET]
+    priority: 10
+    plugins:
+      limit-count: { count: 60, time_window: 60, key_type: var, key: remote_addr, rejected_code: 429, policy: local }
+    upstream_id: analytics-api
+
+  # ---------------------------------------------------------- metadata-api
+  - id: meta
+    uri: /api/v1/meta/*
+    upstream_id: metadata-api
+    plugins:
+      openid-connect:
+        client_id: ${KEYCLOAK_GATEWAY_CLIENT_ID}
+        client_secret: ${KEYCLOAK_GATEWAY_CLIENT_SECRET}
+        discovery: http://keycloak:8080/realms/${KEYCLOAK_REALM}/.well-known/openid-configuration
+        realm: ${KEYCLOAK_REALM}
+        bearer_only: true
+        use_jwks: true
+        set_userinfo_header: false
+        set_access_token_header: false
+        set_id_token_header: false
+        ssl_verify: false
+        timeout: 5
+      limit-count: { count: 600, time_window: 60, key_type: var, key: remote_addr, rejected_code: 429, policy: local, show_limit_quota_header: true }
+      cors:
+        allow_origins: ${PUBLIC_WEB_URL}
+        allow_methods: GET,POST,PUT,PATCH,DELETE,OPTIONS
+        allow_headers: Authorization,Content-Type,Idempotency-Key,X-Request-ID,If-Match,If-None-Match
+        expose_headers: X-Request-ID,ETag,X-RateLimit-Remaining
+        max_age: 600
+        allow_credential: false
+
+  # ---------------------------------------------------------- ingestion-api
+  - id: ingest-upload
+    uri: /api/v1/ingest/upload-csv
+    priority: 5
+    methods: [POST, OPTIONS]
+    upstream_id: ingestion-api
+    plugins:
+      openid-connect:
+        client_id: ${KEYCLOAK_GATEWAY_CLIENT_ID}
+        client_secret: ${KEYCLOAK_GATEWAY_CLIENT_SECRET}
+        discovery: http://keycloak:8080/realms/${KEYCLOAK_REALM}/.well-known/openid-configuration
+        realm: ${KEYCLOAK_REALM}
+        bearer_only: true
+        use_jwks: true
+        set_userinfo_header: false
+        set_access_token_header: false
+        set_id_token_header: false
+        ssl_verify: false
+        timeout: 5
+      limit-count: { count: 20, time_window: 60, key_type: var, key: remote_addr, rejected_code: 429, policy: local, show_limit_quota_header: true }
+      client-control: { max_body_size: 10485760 }
+      cors:
+        allow_origins: ${PUBLIC_WEB_URL}
+        allow_methods: GET,POST,PUT,PATCH,DELETE,OPTIONS
+        allow_headers: Authorization,Content-Type,Idempotency-Key,X-Request-ID,If-Match,If-None-Match
+        expose_headers: X-Request-ID,ETag,X-RateLimit-Remaining
+        max_age: 600
+        allow_credential: false
+
+  - id: ingest
+    uri: /api/v1/ingest/*
+    upstream_id: ingestion-api
+    plugins:
+      openid-connect:
+        client_id: ${KEYCLOAK_GATEWAY_CLIENT_ID}
+        client_secret: ${KEYCLOAK_GATEWAY_CLIENT_SECRET}
+        discovery: http://keycloak:8080/realms/${KEYCLOAK_REALM}/.well-known/openid-configuration
+        realm: ${KEYCLOAK_REALM}
+        bearer_only: true
+        use_jwks: true
+        set_userinfo_header: false
+        set_access_token_header: false
+        set_id_token_header: false
+        ssl_verify: false
+        timeout: 5
+      limit-count: { count: 120, time_window: 60, key_type: var, key: remote_addr, rejected_code: 429, policy: local, show_limit_quota_header: true }
+      client-control: { max_body_size: 6291456 }
+      cors:
+        allow_origins: ${PUBLIC_WEB_URL}
+        allow_methods: GET,POST,PUT,PATCH,DELETE,OPTIONS
+        allow_headers: Authorization,Content-Type,Idempotency-Key,X-Request-ID,If-Match,If-None-Match
+        expose_headers: X-Request-ID,ETag,X-RateLimit-Remaining
+        max_age: 600
+        allow_credential: false
+
+  # ---------------------------------------------------------- analytics-api
+  - id: analytics-get
+    uri: /api/v1/analytics/*
+    methods: [GET, OPTIONS]
+    upstream_id: analytics-api
+    plugins:
+      openid-connect:
+        client_id: ${KEYCLOAK_GATEWAY_CLIENT_ID}
+        client_secret: ${KEYCLOAK_GATEWAY_CLIENT_SECRET}
+        discovery: http://keycloak:8080/realms/${KEYCLOAK_REALM}/.well-known/openid-configuration
+        realm: ${KEYCLOAK_REALM}
+        bearer_only: true
+        use_jwks: true
+        set_userinfo_header: false
+        set_access_token_header: false
+        set_id_token_header: false
+        ssl_verify: false
+        timeout: 5
+      limit-count: { count: 600, time_window: 60, key_type: var, key: remote_addr, rejected_code: 429, policy: local, show_limit_quota_header: true }
+      proxy-cache:
+        cache_strategy: memory
+        cache_zone: analytics_cache
+        cache_key: ["$host", "$request_uri", "$http_authorization"]
+        cache_method: [GET]
+        cache_http_status: [200]
+        cache_ttl: 60
+        hide_cache_headers: true
+      cors:
+        allow_origins: ${PUBLIC_WEB_URL}
+        allow_methods: GET,POST,PUT,PATCH,DELETE,OPTIONS
+        allow_headers: Authorization,Content-Type,Idempotency-Key,X-Request-ID,If-Match,If-None-Match
+        expose_headers: X-Request-ID,ETag,X-RateLimit-Remaining
+        max_age: 600
+        allow_credential: false
+
+  - id: analytics-post
+    uri: /api/v1/analytics/*
+    methods: [POST]
+    upstream_id: analytics-api
+    plugins:
+      openid-connect:
+        client_id: ${KEYCLOAK_GATEWAY_CLIENT_ID}
+        client_secret: ${KEYCLOAK_GATEWAY_CLIENT_SECRET}
+        discovery: http://keycloak:8080/realms/${KEYCLOAK_REALM}/.well-known/openid-configuration
+        realm: ${KEYCLOAK_REALM}
+        bearer_only: true
+        use_jwks: true
+        set_userinfo_header: false
+        set_access_token_header: false
+        set_id_token_header: false
+        ssl_verify: false
+        timeout: 5
+      limit-count: { count: 300, time_window: 60, key_type: var, key: remote_addr, rejected_code: 429, policy: local, show_limit_quota_header: true }
+      client-control: { max_body_size: 65536 }
+      cors:
+        allow_origins: ${PUBLIC_WEB_URL}
+        allow_methods: GET,POST,PUT,PATCH,DELETE,OPTIONS
+        allow_headers: Authorization,Content-Type,Idempotency-Key,X-Request-ID,If-Match,If-None-Match
+        expose_headers: X-Request-ID,ETag,X-RateLimit-Remaining
+        max_age: 600
+        allow_credential: false
+#END

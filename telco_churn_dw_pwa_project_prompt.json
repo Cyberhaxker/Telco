@@ -1,0 +1,366 @@
+{
+  "prompt_version": "1.0",
+  "generated_on": "2026-10-21",
+  "role": "You are a senior full-stack data platform engineer. Build the complete, production-ready system described below as a single monorepo. Write real, runnable code (no pseudo-code, no TODO placeholders), with configuration, tests and documentation. Every component must be free and open source; do not introduce any paid, source-available (e.g. ELv2/BSL) or enterprise-only dependency.",
+
+  "project": {
+    "name": "Telco Churn Analytics Platform",
+    "repo_name": "telco-churn-dw-platform",
+    "summary": "An offline-capable Progressive Web Application (PWA) on top of a PostgreSQL star-schema data warehouse for telecommunications customer-churn analysis. It supports metadata management and data entry, batch ingestion with validation and queuing, ETL orchestration, OLAP analytics (roll-up, drill-down, slice, dice, pivot) and predictive churn scoring with machine learning.",
+    "origin": "Extends an academic project: 'Development of a Data Warehouse and Application of Data Mining Techniques for Customer Churn Analysis in the Telecommunications Sector'.",
+    "dataset": {
+      "name": "IBM Telco Customer Churn sample",
+      "file": "data/raw/Telco-Customer-Churn.csv",
+      "shape": "7,043 rows x 21 columns",
+      "target": "Churn (Yes/No) mapped to 1/0",
+      "known_quality_issues": [
+        "TotalCharges is stored as text; converting to numeric yields 11 missing values (customers with tenure 0)",
+        "customerID is an identifier and must be excluded from model features",
+        "No duplicate customer IDs"
+      ],
+      "baseline_validation_counts": {
+        "dim_customer": 7043,
+        "dim_contract": 6,
+        "dim_service": 322,
+        "dim_payment": 4,
+        "dim_churn": 2,
+        "fact_customer_churn": 7043,
+        "churn_no": 5174,
+        "churn_yes": 1869
+      }
+    }
+  },
+
+  "technology_stack": {
+    "licence_policy": "Only OSI-approved open-source licences (Apache 2.0, MIT, BSD, PostgreSQL, PSF, GPL for standalone servers). Reject any component or plugin that requires a commercial licence key.",
+    "components": [
+      { "layer": "ETL orchestration", "tool": "Apache Airflow 3.x", "licence": "Apache 2.0" },
+      { "layer": "Transformations / modelling", "tool": "dbt Core with dbt-postgres adapter (NOT dbt Fusion or dbt Cloud)", "licence": "Apache 2.0" },
+      { "layer": "Metadata, data-entry and analytics APIs", "tool": "FastAPI + Pydantic v2 + SQLAlchemy 2.x + Alembic", "licence": "MIT" },
+      { "layer": "Operational (OLTP) database", "tool": "MySQL Community Server 8.4 LTS", "licence": "GPLv2" },
+      { "layer": "Dimensional data warehouse (OLAP)", "tool": "PostgreSQL 17+ (star schema)", "licence": "PostgreSQL Licence" },
+      { "layer": "Machine learning", "tool": "Python 3.12+, pandas, scikit-learn, joblib, MLflow (tracking + model registry)", "licence": "BSD / Apache 2.0" },
+      { "layer": "Message queue / event streaming", "tool": "Apache Kafka 4.x in KRaft mode (no ZooKeeper; NOT Confluent Platform)", "licence": "Apache 2.0" },
+      { "layer": "API gateway", "tool": "Apache APISIX 3.x (openid-connect, jwt-auth, limit-count, cors, prometheus plugins)", "licence": "Apache 2.0" },
+      { "layer": "Identity and authentication", "tool": "Keycloak (OIDC / OAuth2, realm roles)", "licence": "Apache 2.0" },
+      { "layer": "Static asset web server / TLS termination (optional)", "tool": "NGINX open source", "licence": "BSD-2-Clause" },
+      { "layer": "PWA frontend", "tool": "Next.js (App Router) + TypeScript + Serwist service worker", "licence": "MIT" },
+      { "layer": "Offline storage", "tool": "IndexedDB via Dexie.js 4", "licence": "Browser standard / Apache 2.0" },
+      { "layer": "Charts / pivot UI", "tool": "Apache ECharts + TanStack Table", "licence": "Apache 2.0 / MIT" },
+      { "layer": "Cache / sessions", "tool": "Valkey (Redis-compatible)", "licence": "BSD-3-Clause" },
+      { "layer": "Observability", "tool": "Prometheus + Grafana OSS + Loki", "licence": "Apache 2.0 / AGPLv3" },
+      { "layer": "Containerisation", "tool": "Docker + Docker Compose (Kubernetes manifests optional)", "licence": "Apache 2.0" }
+    ],
+    "forbidden": ["Kong Enterprise", "Confluent Server", "dbt Cloud", "dbt Fusion proprietary binary", "NGINX Plus", "Power BI as a required dependency", "any SaaS-only service"]
+  },
+
+  "architecture": {
+    "request_flow": "Browser PWA -> (NGINX static) -> APISIX gateway (OIDC token validation against Keycloak, rate limiting, CORS) -> FastAPI services -> MySQL (operational) / PostgreSQL (warehouse) / Kafka",
+    "data_flow": [
+      "1. Data entry and CSV uploads from the PWA are stored offline in IndexedDB when the device has no connectivity.",
+      "2. On reconnect, the PWA sends batch payloads to the Ingestion API with idempotency keys.",
+      "3. The Ingestion API validates every record (Pydantic schemas + business rules), writes accepted records to MySQL staging/operational tables and publishes events to Kafka; rejected records go to a dead-letter topic and are returned to the client with per-row errors.",
+      "4. A Kafka consumer service lands events into the PostgreSQL 'raw' schema.",
+      "5. Airflow DAGs orchestrate extract from MySQL -> load to PostgreSQL 'raw' -> dbt run/test (staging -> intermediate -> marts star schema) -> refresh OLAP materialised views -> trigger ML batch scoring.",
+      "6. The Analytics API exposes OLAP queries and predictions to the PWA; results are cached in IndexedDB for offline viewing."
+    ],
+    "services": [
+      { "name": "frontend", "path": "apps/web", "tech": "Next.js PWA" },
+      { "name": "metadata-api", "path": "services/metadata_api", "tech": "FastAPI", "responsibility": "Data dictionary, dataset/source registry, lineage, data-quality results, user-facing metadata" },
+      { "name": "ingestion-api", "path": "services/ingestion_api", "tech": "FastAPI", "responsibility": "Data entry CRUD, batch payload validation, idempotent batch acceptance, Kafka producer" },
+      { "name": "analytics-api", "path": "services/analytics_api", "tech": "FastAPI", "responsibility": "OLAP query endpoint, KPI endpoints, predictions, model metadata" },
+      { "name": "stream-consumer", "path": "services/stream_consumer", "tech": "Python aiokafka", "responsibility": "Consume validated events into PostgreSQL raw schema; DLQ handling; retries with backoff" },
+      { "name": "ml", "path": "ml", "tech": "scikit-learn + MLflow", "responsibility": "Training, evaluation, registry, batch scoring" },
+      { "name": "airflow", "path": "orchestration/airflow", "tech": "Apache Airflow" },
+      { "name": "dbt", "path": "transform/dbt_telco", "tech": "dbt Core" },
+      { "name": "gateway", "path": "infra/apisix", "tech": "Apache APISIX (declarative standalone YAML config)" },
+      { "name": "identity", "path": "infra/keycloak", "tech": "Keycloak realm export JSON" },
+      { "name": "databases", "path": "infra/db", "tech": "MySQL + PostgreSQL init scripts" },
+      { "name": "kafka", "path": "infra/kafka", "tech": "Kafka KRaft single broker for dev, 3 brokers for prod profile" },
+      { "name": "observability", "path": "infra/observability", "tech": "Prometheus, Grafana, Loki" }
+    ]
+  },
+
+  "operational_database_mysql": {
+    "database": "telco_ops",
+    "purpose": "Source of truth for day-to-day data entry; normalised (3NF).",
+    "tables": {
+      "customers": "customer_id (PK, varchar), gender, senior_citizen, partner, dependents, created_at, updated_at, version",
+      "subscriptions": "subscription_id (PK), customer_id (FK), contract_type, paperless_billing, payment_method, monthly_charges DECIMAL(10,2), total_charges DECIMAL(12,2) NULL, tenure_months, start_date, end_date NULL, churned BOOLEAN, churn_date NULL",
+      "subscription_services": "subscription_id (FK), phone_service, multiple_lines, internet_service, online_security, online_backup, device_protection, tech_support, streaming_tv, streaming_movies",
+      "ingestion_batches": "batch_id (PK, UUID), idempotency_key (UNIQUE), client_id, submitted_by, record_count, accepted_count, rejected_count, status (RECEIVED|VALIDATED|PUBLISHED|FAILED), checksum_sha256, received_at, processed_at",
+      "ingestion_errors": "id (PK), batch_id (FK), row_number, field, error_code, message",
+      "audit_log": "id, actor, action, entity, entity_id, before_json, after_json, at"
+    },
+    "requirements": ["Alembic migrations", "updated_at + optimistic-locking 'version' column for offline conflict detection", "Binlog enabled (ROW format) to allow future CDC"]
+  },
+
+  "data_warehouse_postgresql": {
+    "database": "telco_dw",
+    "schemas": {
+      "raw": "Landed data as-is (from Airflow extract and Kafka consumer), with _loaded_at and _source columns",
+      "staging": "dbt staging views: typing, renaming, cleaning (TotalCharges -> numeric, blanks -> NULL)",
+      "intermediate": "dbt joins and business logic",
+      "marts": "Star schema (dimensions + fact)",
+      "olap": "Materialised views / aggregates for fast OLAP",
+      "ml": "Feature tables, predictions, model run metadata",
+      "meta": "Data dictionary, lineage, data-quality results (owned by metadata-api)"
+    },
+    "star_schema": {
+      "grain": "One row per customer subscription snapshot per load date",
+      "dimensions": {
+        "dim_customer": "customer_key (surrogate PK), customer_id (natural key), gender, senior_citizen, partner, dependents, valid_from, valid_to, is_current (SCD Type 2)",
+        "dim_contract": "contract_key, contract_type, paperless_billing",
+        "dim_service": "service_key, phone_service, multiple_lines, internet_service, online_security, online_backup, device_protection, tech_support, streaming_tv, streaming_movies",
+        "dim_payment": "payment_key, payment_method, is_automatic",
+        "dim_churn": "churn_key, churn_flag, churn_label",
+        "dim_date": "date_key (YYYYMMDD), date, day, week, month, month_name, quarter, year, is_weekend",
+        "dim_tenure_band": "tenure_band_key, band_label (0-12, 13-24, 25-48, 49-72), min_months, max_months"
+      },
+      "fact_customer_churn": "customer_key, contract_key, service_key, payment_key, churn_key, date_key, tenure_band_key, tenure_months, monthly_charges, total_charges, churn_probability NULL, customer_count (=1)",
+      "constraints": ["Foreign keys from fact to every dimension", "Indexes on every fact foreign key", "BRIN index on date_key"]
+    },
+    "olap_layer": {
+      "approach": "PostgreSQL GROUPING SETS / ROLLUP / CUBE plus materialised views refreshed CONCURRENTLY by Airflow after dbt runs",
+      "materialised_views": ["mv_churn_by_contract_payment", "mv_churn_by_tenure_band", "mv_churn_cube (CUBE over contract_type, payment_method, internet_service, tenure_band)"],
+      "operations_to_support": {
+        "roll_up": "e.g. tenure_band -> all customers; month -> quarter -> year",
+        "drill_down": "e.g. contract_type -> contract_type + payment_method -> + internet_service",
+        "slice": "fix one dimension value, e.g. contract_type = 'Month-to-month'",
+        "dice": "filter on several dimensions, e.g. contract in (...) and payment_method in (...)",
+        "pivot": "swap rows/columns of the result grid in the UI"
+      },
+      "measures": ["customer_count", "churned_count", "churn_rate_pct", "avg_monthly_charges", "sum_total_charges", "avg_tenure_months", "avg_churn_probability"]
+    }
+  },
+
+  "etl_orchestration": {
+    "airflow": {
+      "executor": "LocalExecutor for dev, CeleryExecutor (Valkey broker) for prod profile",
+      "dags": [
+        { "id": "seed_initial_csv", "schedule": "manual", "steps": ["validate CSV against schema", "load to MySQL telco_ops", "record batch in ingestion_batches"] },
+        { "id": "ops_to_dw_daily", "schedule": "@daily", "steps": ["incremental extract from MySQL by updated_at watermark", "load to PostgreSQL raw", "dbt build (run + test) via BashOperator or Cosmos", "refresh olap materialised views", "publish data-quality results to meta schema", "emit 'dw.refreshed' Kafka event"] },
+        { "id": "ml_train_weekly", "schedule": "@weekly", "steps": ["build feature table", "train 4 models", "evaluate with stratified 5-fold CV", "log to MLflow", "promote best model if it beats current champion on chosen metric"] },
+        { "id": "ml_score_daily", "schedule": "after ops_to_dw_daily", "steps": ["load champion model", "score current customers", "write ml.predictions and update fact churn_probability"] }
+      ],
+      "requirements": ["Idempotent tasks", "retries=3 with exponential backoff", "SLA/failure alerts via email or webhook", "connections and secrets via environment variables, never hard-coded"]
+    },
+    "dbt": {
+      "project": "dbt_telco",
+      "layers": ["models/staging", "models/intermediate", "models/marts", "snapshots (dim_customer SCD2)", "seeds (dim_tenure_band, dim_date generator macro)"],
+      "tests": ["unique + not_null on every surrogate key", "relationships from fact to all dimensions", "accepted_values for contract_type, payment_method, internet_service, churn_flag", "custom test: fact row count equals distinct current customers", "custom test: churn_yes + churn_no = total"],
+      "docs": "dbt docs generate; expose manifest.json to metadata-api for lineage"
+    }
+  },
+
+  "messaging_kafka": {
+    "mode": "KRaft",
+    "topics": [
+      { "name": "ingest.customers.v1", "partitions": 3, "key": "customer_id" },
+      { "name": "ingest.subscriptions.v1", "partitions": 3, "key": "customer_id" },
+      { "name": "ingest.dlq.v1", "partitions": 1, "purpose": "rejected or unprocessable records with error metadata" },
+      { "name": "dw.events.v1", "partitions": 1, "purpose": "dw.refreshed, model.promoted notifications" }
+    ],
+    "message_envelope": "{ event_id (UUID), event_type, schema_version, batch_id, produced_at, source, payload }",
+    "delivery": "Producer acks=all, enable.idempotence=true; consumer at-least-once with idempotent upsert on event_id",
+    "schemas": "JSON Schema files in contracts/ shared by producer, consumer and frontend"
+  },
+
+  "offline_sync_and_batch_ingestion": {
+    "client_side": {
+      "indexeddb_stores": {
+        "metadata": "data dictionary, dimension member lists, dropdown values (cached for offline forms)",
+        "drafts": "unsent data-entry records",
+        "outbox": "queued batches: { batch_id, idempotency_key, records[], checksum, status (PENDING|SENDING|ACCEPTED|PARTIAL|REJECTED), attempts, last_error, created_at }",
+        "analytics_cache": "last OLAP results and KPIs with fetched_at timestamp",
+        "sync_state": "last_sync_at, metadata_etag"
+      },
+      "behaviour": [
+        "Validate each record in the browser with the same JSON Schema used by the server before queuing",
+        "Group records into batches of at most 500 records",
+        "Compute SHA-256 checksum of the batch payload",
+        "Sync on 'online' event, on app start and via Background Sync API where supported; manual 'Sync now' button otherwise",
+        "Exponential backoff with jitter on failure; max 8 attempts then mark FAILED for user review",
+        "Show per-row server errors and allow correction and resubmission",
+        "Show a clear online/offline indicator and pending-outbox count"
+      ]
+    },
+    "server_side": {
+      "endpoint": "POST /api/v1/ingest/batches",
+      "headers": ["Authorization: Bearer <JWT>", "Idempotency-Key: <uuid>"],
+      "validation_pipeline": ["verify checksum", "reject duplicate Idempotency-Key by returning the original result", "max payload size 5 MB and 500 records", "Pydantic schema validation per record", "business rules (tenure >= 0, monthly_charges > 0, total_charges >= monthly_charges when tenure > 0, enums valid)", "optimistic-locking conflict check using 'version'"],
+      "response": "{ batch_id, status, accepted_count, rejected_count, errors: [{ row, field, code, message }], conflicts: [{ customer_id, server_version, client_version }] }",
+      "conflict_policy": "Server wins by default; conflicts are returned to the client to resolve manually"
+    }
+  },
+
+  "api_gateway_and_auth": {
+    "gateway": "Apache APISIX (standalone declarative mode, apisix.yaml)",
+    "identity_provider": "Keycloak realm 'telco'",
+    "roles": {
+      "admin": "manage users, metadata, pipelines and models",
+      "data_steward": "manage metadata and data dictionary, review rejected batches",
+      "data_entry": "create/update operational records and submit batches",
+      "analyst": "read OLAP analytics and predictions",
+      "viewer": "read dashboards only"
+    },
+    "gateway_plugins_per_route": {
+      "/api/v1/meta/*": ["openid-connect (bearer_only)", "limit-count", "cors", "prometheus"],
+      "/api/v1/ingest/*": ["openid-connect (bearer_only)", "limit-count (stricter)", "client-control (max body size)", "cors"],
+      "/api/v1/analytics/*": ["openid-connect (bearer_only)", "limit-count", "proxy-cache for GET", "cors"]
+    },
+    "frontend_auth": "Authorization Code flow with PKCE against Keycloak; tokens kept in memory, refresh token handled securely; offline mode allows viewing cached data and queuing writes, with the token refreshed before sync",
+    "fine_grained_authorisation": "Validate JWT again in FastAPI (defence in depth) and enforce role checks with dependency-injected guards"
+  },
+
+  "api_specification": {
+    "metadata_api": [
+      "GET /api/v1/meta/datasets",
+      "GET /api/v1/meta/dictionary?table=",
+      "PUT /api/v1/meta/dictionary/{column_id}",
+      "GET /api/v1/meta/lineage/{model}",
+      "GET /api/v1/meta/quality/runs",
+      "GET /api/v1/meta/dimensions/{dimension}/members"
+    ],
+    "ingestion_api": [
+      "GET/POST/PUT /api/v1/ingest/customers",
+      "GET/POST/PUT /api/v1/ingest/subscriptions",
+      "POST /api/v1/ingest/batches",
+      "GET /api/v1/ingest/batches/{batch_id}",
+      "POST /api/v1/ingest/upload-csv (server-side chunking into batches)"
+    ],
+    "analytics_api": [
+      "POST /api/v1/analytics/olap/query  body: { measures[], rows[], columns[], filters{}, operation: 'rollup'|'drilldown'|'slice'|'dice'|'pivot', limit }",
+      "GET /api/v1/analytics/kpis",
+      "GET /api/v1/analytics/predictions?risk=high&limit=",
+      "GET /api/v1/analytics/predictions/{customer_id}",
+      "POST /api/v1/analytics/predict (score an ad-hoc customer profile)",
+      "GET /api/v1/analytics/models (registry, metrics, champion)"
+    ],
+    "rules": ["OpenAPI docs auto-generated", "Whitelist dimensions and measures in the OLAP endpoint and build SQL with bound parameters only (no string-concatenated SQL)", "Pagination on all list endpoints", "Consistent error format (RFC 9457 problem+json)", "Health endpoints /healthz and /readyz on every service"]
+  },
+
+  "machine_learning": {
+    "task": "Supervised binary classification of churn",
+    "features": "tenure, MonthlyCharges, TotalCharges and categorical customer, service, contract and payment attributes; exclude customerID",
+    "preprocessing": "sklearn ColumnTransformer inside a Pipeline: numeric -> median imputation + StandardScaler; categorical -> most-frequent imputation + OneHotEncoder(handle_unknown='ignore'); fitted only on training folds to avoid leakage",
+    "models": ["LogisticRegression", "DecisionTreeClassifier", "RandomForestClassifier", "GradientBoostingClassifier"],
+    "evaluation": {
+      "split": "80/20 stratified hold-out, random_state=42, plus stratified 5-fold cross-validation on the training set",
+      "metrics": ["accuracy", "precision", "recall", "f1", "roc_auc", "confusion_matrix"],
+      "extras": ["class-imbalance handling (class_weight='balanced' option)", "decision-threshold tuning on a validation fold", "probability calibration (CalibratedClassifierCV)", "permutation importance"],
+      "baseline_results_to_reproduce_or_beat": {
+        "LogisticRegression": { "accuracy": 0.8055, "precision": 0.6572, "recall": 0.5588, "f1": 0.6040, "roc_auc": 0.8419 },
+        "DecisionTree": { "accuracy": 0.7984, "precision": 0.6347, "recall": 0.5668, "f1": 0.5989, "roc_auc": 0.8282 },
+        "RandomForest": { "accuracy": 0.7587, "precision": 0.5311, "recall": 0.7754, "f1": 0.6304, "roc_auc": 0.8410 },
+        "GradientBoosting": { "accuracy": 0.8055, "precision": 0.6761, "recall": 0.5134, "f1": 0.5836, "roc_auc": 0.8455 }
+      },
+      "champion_selection": "Configurable metric (default: F1 on the churn class, since missed churners are costly); must also exceed ROC-AUC 0.83"
+    },
+    "registry_and_serving": "MLflow tracking + model registry (aliases 'champion' and 'challenger'); analytics-api loads the champion at start-up and on 'model.promoted' Kafka event",
+    "responsible_use": ["Report that feature importance shows model reliance, not causation", "Monitor prediction drift (PSI on key features) and log it", "Do not use protected attributes (gender, senior_citizen) for automated decisions; report fairness metrics by group"]
+  },
+
+  "pwa_frontend": {
+    "framework": "Next.js App Router, TypeScript strict mode",
+    "pwa_requirements": ["Web App Manifest with icons and theme colours", "Service worker via Serwist: precache app shell, NetworkFirst for API GET with fallback to IndexedDB cache, never cache POST", "Installable on Android, iOS and desktop", "Lighthouse PWA and accessibility score >= 90"],
+    "pages": {
+      "/login": "Keycloak PKCE login",
+      "/dashboard": "KPI cards (total customers, churn rate, high-risk count, avg monthly charges) and key charts",
+      "/olap": "Interactive OLAP explorer: choose measures, row and column dimensions, filters; buttons for roll-up, drill-down, slice, dice, pivot; chart and pivot-table views; CSV export",
+      "/predictions": "High-risk customer list with probability, sortable and filterable; customer detail with top contributing factors",
+      "/data-entry": "Customer and subscription forms working fully offline",
+      "/uploads": "CSV upload with client-side validation preview and batch queue",
+      "/sync": "Outbox status, per-batch errors, retry and conflict resolution",
+      "/metadata": "Data dictionary browser/editor, lineage view, data-quality results",
+      "/models": "Model comparison table and metrics charts",
+      "/admin": "Pipeline run status (read from Airflow REST API via backend), user roles overview"
+    },
+    "ux": ["Responsive mobile-first layout", "Online/offline banner and pending-sync badge", "Role-based navigation", "Dark and light theme", "WCAG 2.1 AA"]
+  },
+
+  "security": [
+    "TLS everywhere in production (NGINX or APISIX termination)",
+    "All secrets in .env files excluded from git, with .env.example provided; support Docker secrets",
+    "Least-privilege database users per service (read-only user for analytics-api)",
+    "Parameterised queries only; input validation on every endpoint",
+    "CORS restricted to the PWA origin",
+    "Rate limiting at the gateway",
+    "Security headers (CSP, HSTS, X-Content-Type-Options)",
+    "Audit logging of all data-entry changes",
+    "Personal data minimisation; document a privacy note for real (non-sample) data"
+  ],
+
+  "observability": [
+    "Structured JSON logs with request/trace IDs propagated from the gateway",
+    "Prometheus metrics from APISIX, FastAPI (prometheus-fastapi-instrumentator), Kafka exporter, PostgreSQL and MySQL exporters, Airflow statsd",
+    "Grafana dashboards: API latency/error rate, Kafka consumer lag, DAG success rate, data freshness, model metrics"
+  ],
+
+  "testing": {
+    "backend": "pytest with unit tests and integration tests using Testcontainers (MySQL, PostgreSQL, Kafka); minimum 80% coverage for services",
+    "dbt": "dbt build with all schema and custom tests passing; row-count reconciliation against baseline_validation_counts",
+    "ml": "Tests for pipeline leakage (preprocessing fitted only in training), reproducibility with fixed seeds, metric thresholds",
+    "frontend": "Vitest + React Testing Library for components; Playwright end-to-end tests including offline mode (context.setOffline) -> queue -> reconnect -> sync -> verify in warehouse",
+    "load": "k6 script for analytics and ingestion endpoints",
+    "ci": "GitHub Actions: lint (ruff, mypy, eslint, prettier), tests, dbt compile, Docker image builds"
+  },
+
+  "deployment": {
+    "local": "One command: 'make up' runs docker compose with all services, seeds Keycloak realm, creates Kafka topics, runs migrations, loads the CSV and triggers the first DAG run",
+    "profiles": ["dev (single instances)", "prod (3 Kafka brokers, Celery workers, resource limits, TLS)"],
+    "ports_dev": { "apisix": 9080, "web": 3000, "keycloak": 8081, "airflow": 8082, "mlflow": 5000, "grafana": 3001, "postgres": 5432, "mysql": 3306, "kafka": 9092 },
+    "optional": "Kubernetes manifests or Helm values in infra/k8s"
+  },
+
+  "repository_structure": [
+    "apps/web/",
+    "services/metadata_api/",
+    "services/ingestion_api/",
+    "services/analytics_api/",
+    "services/stream_consumer/",
+    "libs/common_py/ (shared settings, auth, logging, schemas)",
+    "contracts/ (JSON Schemas for records and Kafka messages)",
+    "orchestration/airflow/dags/",
+    "transform/dbt_telco/",
+    "ml/ (training, evaluation, scoring, notebooks)",
+    "infra/apisix/", "infra/keycloak/", "infra/db/", "infra/kafka/", "infra/nginx/", "infra/observability/",
+    "data/raw/Telco-Customer-Churn.csv",
+    "tests/e2e/",
+    "docs/",
+    "docker-compose.yml", "docker-compose.prod.yml", "Makefile", ".env.example", "README.md", "LICENSE"
+  ],
+
+  "documentation_deliverables": [
+    "README with architecture diagram (Mermaid), quick start and troubleshooting",
+    "docs/architecture.md (components, data flow, sequence diagrams for offline sync and auth)",
+    "docs/data-model.md (ERD of MySQL and star schema)",
+    "docs/api.md (links to OpenAPI) and docs/olap-guide.md with example queries for each OLAP operation",
+    "docs/ml-report.md (method, metrics vs baseline, limitations)",
+    "docs/licences.md listing every dependency and its licence",
+    "docs/runbook.md (backups, restore, rotating secrets, reprocessing the DLQ)"
+  ],
+
+  "build_phases": [
+    { "phase": 1, "name": "Foundation", "output": "Monorepo, Docker Compose, MySQL + PostgreSQL + Kafka + Keycloak + APISIX running, .env.example, Makefile" },
+    { "phase": 2, "name": "Operational data and ingestion", "output": "MySQL schema + Alembic, ingestion-api with batch validation and Kafka producer, CSV seed" },
+    { "phase": 3, "name": "Warehouse and ETL", "output": "stream-consumer, Airflow DAGs, dbt project with star schema and tests, OLAP materialised views" },
+    { "phase": 4, "name": "Metadata and analytics APIs", "output": "metadata-api, analytics-api with OLAP endpoint" },
+    { "phase": 5, "name": "Machine learning", "output": "Training, MLflow registry, batch scoring, prediction endpoints" },
+    { "phase": 6, "name": "PWA", "output": "Next.js app with auth, dashboard, OLAP explorer, offline data entry, outbox sync" },
+    { "phase": 7, "name": "Hardening", "output": "Security headers, observability, tests, CI, documentation" }
+  ],
+
+  "acceptance_criteria": [
+    "'make up' starts the whole stack from a clean machine with only Docker installed",
+    "After the first pipeline run, warehouse counts match baseline_validation_counts and all dbt tests pass with 0 invalid dimension links",
+    "OLAP explorer reproduces: month-to-month churn 1,655 of 3,875 (42.71%); one-year 166 of 1,473 (11.27%); two-year 48 of 1,695 (2.83%); tenure 0-12 months 1,037 of 2,186 (47.44%); electronic check 1,071 of 2,365 (45.29%)",
+    "A user can go offline, enter records and upload a CSV, come back online and see them synced, validated and visible in the warehouse after the next DAG run, with no duplicates when the same batch is resent",
+    "Requests without a valid Keycloak token are rejected by APISIX with 401; role restrictions return 403",
+    "Champion model ROC-AUC >= 0.83 on the hold-out set, with metrics logged in MLflow",
+    "PWA is installable and passes Lighthouse PWA and accessibility >= 90",
+    "No dependency requires a commercial licence"
+  ],
+
+  "output_instructions": "Work phase by phase. At the start of each phase list the files you will create; then produce complete file contents. Do not skip files with comments like '...rest of code'. End each phase with the commands to run and verify it. Ask before deviating from the stack above."
+}
