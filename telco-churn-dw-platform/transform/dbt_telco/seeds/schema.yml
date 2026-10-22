@@ -1,0 +1,6 @@
+version: 2
+seeds:
+  - name: seed_tenure_band
+    description: Tenure bands used by dim_tenure_band. 49-72 is open-ended so new long-tenure customers still map to a band.
+    config:
+      column_types: { tenure_band_key: integer, band_label: varchar(10), min_months: integer, max_months: integer, sort_order: integer }

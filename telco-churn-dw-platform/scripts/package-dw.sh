@@ -7,16 +7,20 @@ cd "$(dirname "$0")/.."
 
 TAG="${IMAGE_TAG:-$(date +%Y.%m.%d)}"
 OUT="dist/telco-churn-dw-${TAG}"
+rm -rf "$OUT"
 mkdir -p "$OUT"
 
 [[ -f .env ]] || ./scripts/generate-env.sh
 export IMAGE_TAG="$TAG"
-docker compose -f docker-compose.dw.yml --profile tools build
+docker compose -p telco-dw -f docker-compose.dw.yml --profile tools build
 
 docker save "telco/dw-postgres:${TAG}" "telco/dbt:${TAG}" | gzip -6 > "$OUT/images.tar.gz"
 cp docker-compose.dw.yml "$OUT/docker-compose.yml"
-grep -E '^(DW_|POSTGRES_PORT)' .env.example > "$OUT/.env.example"
-echo "IMAGE_TAG=${TAG}" >> "$OUT/.env.example"
+{
+  echo "COMPOSE_PROJECT_NAME=telco-dw"
+  echo "IMAGE_TAG=${TAG}"
+  grep -E '^(DW_|POSTGRES_PORT)' .env.example
+} > "$OUT/.env.example"
 
 # The packaged compose file must not try to build from source.
 sed -i '/^\s*build:/d' "$OUT/docker-compose.yml"
@@ -31,7 +35,8 @@ Telco Churn data warehouse ${TAG}
   5. psql "postgresql://dw_analytics:<password>@localhost:\${POSTGRES_PORT:-5432}/telco_churn_dw"
 EOF
 
-tar -C dist -czf "dist/telco-churn-dw-${TAG}.tar.gz" "telco-churn-dw-${TAG}"
+# images.tar.gz is already compressed; the outer archive is a plain tar.
+tar -C dist -cf "dist/telco-churn-dw-${TAG}.tar" "telco-churn-dw-${TAG}"
 rm -rf "$OUT"
-sha256sum "dist/telco-churn-dw-${TAG}.tar.gz" | tee "dist/telco-churn-dw-${TAG}.tar.gz.sha256"
-echo "Packaged warehouse: dist/telco-churn-dw-${TAG}.tar.gz"
+sha256sum "dist/telco-churn-dw-${TAG}.tar" | tee "dist/telco-churn-dw-${TAG}.tar.sha256"
+echo "Packaged warehouse: dist/telco-churn-dw-${TAG}.tar"

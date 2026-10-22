@@ -4,7 +4,11 @@ SHELL := /bin/bash
 COMPOSE      ?= docker compose
 ALL_PROFILES := --profile airflow --profile ml --profile observability
 PROD         := $(COMPOSE) -f docker-compose.yml -f docker-compose.prod.yml $(ALL_PROFILES)
-DW_COMPOSE   := $(COMPOSE) -f docker-compose.dw.yml
+# The standalone warehouse gets its own project name so it never shares
+# containers or volumes with the full stack (COMPOSE_PROJECT_NAME in .env
+# would otherwise apply to both).
+DW_PROJECT   := -p telco-dw -f docker-compose.dw.yml
+DW_COMPOSE   := $(COMPOSE) $(DW_PROJECT)
 PY_SERVICES  := ingestion_api metadata_api analytics_api stream_consumer
 
 .PHONY: help env up up-core down clean logs ps build bootstrap dw-up dw-down dw-package dw-backup dw-restore \
@@ -53,17 +57,17 @@ dw-down: ## Stop the standalone warehouse
 dw-package: ## Build and save the warehouse images to dist/ as a portable tarball
 	./scripts/package-dw.sh
 
-dw-backup: ## pg_dump the warehouse to backups/
-	./scripts/dw-backup.sh
+dw-backup: ## pg_dump the full stack's warehouse to backups/ (STANDALONE=1 for the standalone one)
+	COMPOSE_ARGS="$(if $(STANDALONE),$(DW_PROJECT))" ./scripts/dw-backup.sh
 
-dw-restore: ## Restore the warehouse from FILE=backups/<file>.dump
-	./scripts/dw-restore.sh $(FILE)
+dw-restore: ## Restore from FILE=backups/<file>.dump (STANDALONE=1 for the standalone warehouse)
+	COMPOSE_ARGS="$(if $(STANDALONE),$(DW_PROJECT))" ./scripts/dw-restore.sh $(FILE)
 
 dbt-build: ## Run dbt build inside the stack
 	$(COMPOSE) run --rm dbt-bootstrap
 
 train: ## Train models, promote champion and score customers
-	$(COMPOSE) --profile ml run --rm ml-train
+	$(COMPOSE) --profile ml --profile ml-oneshot run --rm ml-train
 
 # ---------------------------------------------------------------- prod
 prod-up: ## Start with the production overlay (TLS, 3 Kafka brokers, Celery)
@@ -82,7 +86,7 @@ test-integration: ## Python integration tests (needs Docker for Testcontainers)
 	python -m pytest -m integration
 
 test-dbt: ## dbt build against the running warehouse + baseline reconciliation
-	$(COMPOSE) run --rm dbt-bootstrap bash -c "dbt build && python /app/reconcile.py"
+	$(COMPOSE) run --rm dbt-bootstrap bash -c "scripts/build.sh && python scripts/publish_dq.py && python scripts/reconcile.py --strict"
 
 test-web: ## Frontend unit tests
 	cd apps/web && npm ci && npm run test

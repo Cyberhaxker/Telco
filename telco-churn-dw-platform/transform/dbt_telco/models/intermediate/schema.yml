@@ -1,0 +1,37 @@
+version: 2
+models:
+- name: int_customer_current
+  description: One current record per customer merged from CSV seed, operational extract and event stream.
+  columns:
+  - name: customer_id
+    data_tests:
+    - unique
+    - not_null
+  - name: contract_type
+    data_tests:
+    - accepted_values:
+        arguments:
+          values:
+          - Month-to-month
+          - One year
+          - Two year
+  - name: payment_method
+    data_tests:
+    - accepted_values:
+        arguments:
+          values:
+          - Electronic check
+          - Mailed check
+          - Bank transfer (automatic)
+          - Credit card (automatic)
+  - name: internet_service
+    data_tests:
+    - accepted_values:
+        arguments:
+          values:
+          - DSL
+          - Fiber optic
+          - 'No'
+  - name: churned
+    data_tests:
+    - not_null

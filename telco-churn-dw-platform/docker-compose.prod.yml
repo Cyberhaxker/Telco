@@ -1,0 +1,169 @@
+# Production overlay:  docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile airflow --profile ml --profile observability up -d
+#
+# * TLS terminates at the NGINX edge (infra/nginx); nothing else is published.
+# * Keycloak runs in production mode behind the edge at https://$PUBLIC_DOMAIN/auth.
+# * Kafka: 3 KRaft brokers, replication factor 3, min.insync.replicas 2.
+# * Airflow: CeleryExecutor with a Valkey broker and a separate worker.
+# * Resource limits on every long-running service.
+# Required in .env: PUBLIC_DOMAIN, and PUBLIC_*_URL values pointing at https://$PUBLIC_DOMAIN.
+
+x-limits-small: &limits-small
+  deploy: { resources: { limits: { cpus: "0.50", memory: 256M } } }
+x-limits-medium: &limits-medium
+  deploy: { resources: { limits: { cpus: "1.00", memory: 768M } } }
+x-limits-large: &limits-large
+  deploy: { resources: { limits: { cpus: "2.00", memory: 2G } } }
+
+x-kafka-env: &kafka-env
+  CLUSTER_ID: ${KAFKA_CLUSTER_ID}
+  KAFKA_PROCESS_ROLES: broker,controller
+  KAFKA_LISTENERS: INTERNAL://:9092,CONTROLLER://:9093
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+  KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+  KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+  KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093,2@kafka-2:9093,3@kafka-3:9093
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+  KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+  KAFKA_MIN_INSYNC_REPLICAS: 2
+  KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+  KAFKA_HEAP_OPTS: -Xms512m -Xmx1g
+
+services:
+  edge:
+    image: nginx:1.30.5-alpine
+    restart: unless-stopped
+    networks: [edge, backend]
+    ports: ["80:8080", "443:8443"]
+    read_only: true
+    tmpfs: ["/tmp", "/var/cache/nginx", "/var/run"]
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN}
+      NGINX_ENVSUBST_OUTPUT_DIR: /tmp/conf.d
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/edge.conf.template:/etc/nginx/templates/edge.conf.template:ro
+      - ./infra/nginx/05-tmp-dirs.sh:/docker-entrypoint.d/05-tmp-dirs.sh:ro
+    secrets: [tls_cert, tls_key]
+    depends_on: [web, keycloak]
+    <<: *limits-small
+
+  web:
+    ports: !reset []
+    <<: *limits-small
+  apisix:
+    ports: !reset []
+    <<: *limits-medium
+
+  dw-postgres:
+    ports: !reset []
+    deploy: { resources: { limits: { cpus: "2.00", memory: 2G } } }
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf", "-c", "shared_buffers=512MB", "-c", "effective_cache_size=1536MB"]
+  platform-db:
+    <<: *limits-medium
+  mysql:
+    ports: !reset []
+    <<: *limits-large
+  valkey:
+    <<: *limits-small
+
+  keycloak:
+    command: ["start", "--import-realm", "--health-enabled=true", "--metrics-enabled=true", "--http-relative-path=/auth"]
+    ports: !reset []
+    environment:
+      KC_HOSTNAME: https://${PUBLIC_DOMAIN}/auth
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && echo -e 'GET /auth/health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+    <<: *limits-large
+
+  kafka:
+    ports: !reset []
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 1
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092
+    <<: *limits-large
+  kafka-2:
+    image: apache/kafka:4.2.2
+    restart: unless-stopped
+    networks: [backend]
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 2
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-2:9092
+    volumes: [kafka-2-data:/var/lib/kafka/data]
+    <<: *limits-large
+  kafka-3:
+    image: apache/kafka:4.2.2
+    restart: unless-stopped
+    networks: [backend]
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 3
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-3:9092
+    volumes: [kafka-3-data:/var/lib/kafka/data]
+    <<: *limits-large
+  kafka-init:
+    environment:
+      BOOTSTRAP: kafka:9092,kafka-2:9092,kafka-3:9092
+      REPLICATION_FACTOR: "3"
+
+  ingestion-api:
+    environment: { KAFKA_BOOTSTRAP_SERVERS: "kafka:9092,kafka-2:9092,kafka-3:9092", ENVIRONMENT: production }
+    <<: *limits-medium
+  stream-consumer:
+    environment: { KAFKA_BOOTSTRAP_SERVERS: "kafka:9092,kafka-2:9092,kafka-3:9092" }
+    <<: *limits-small
+  metadata-api:
+    environment: { ENVIRONMENT: production }
+    <<: *limits-small
+  analytics-api:
+    environment: { KAFKA_BOOTSTRAP_SERVERS: "kafka:9092,kafka-2:9092,kafka-3:9092", ENVIRONMENT: production }
+    <<: *limits-medium
+
+  airflow-apiserver:
+    ports: !reset []
+    environment: &celery
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__CELERY__BROKER_URL: redis://:${VALKEY_PASSWORD}@valkey:6379/1
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:${PLATFORM_DB_PASSWORD}@platform-db:5432/airflow
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:9092,kafka-2:9092,kafka-3:9092"
+    <<: *limits-medium
+  airflow-scheduler:
+    environment: *celery
+    <<: *limits-medium
+  airflow-dag-processor:
+    environment: *celery
+    <<: *limits-small
+  airflow-triggerer:
+    environment: *celery
+    <<: *limits-small
+  airflow-worker:
+    profiles: [airflow]
+    environment: *celery
+    deploy: { replicas: 2, resources: { limits: { cpus: "2.00", memory: 3G } } }
+
+  mlflow:
+    ports: !reset []
+    <<: *limits-medium
+  grafana:
+    ports: !reset []
+    environment:
+      GF_SERVER_ROOT_URL: https://${PUBLIC_DOMAIN}/grafana/
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+    <<: *limits-small
+  prometheus:
+    ports: !reset []
+    <<: *limits-medium
+
+secrets:
+  tls_cert: { file: ./infra/nginx/certs/fullchain.pem }
+  tls_key: { file: ./infra/nginx/certs/privkey.pem }
+
+volumes:
+  kafka-2-data: {}
+  kafka-3-data: {}

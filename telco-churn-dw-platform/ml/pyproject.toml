@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "telco-ml"
+version = "1.0.0"
+description = "Churn model training, evaluation, registry promotion and batch scoring"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+dependencies = [
+  "pandas>=2.2,<3",
+  "numpy>=2.0,<3",
+  "scikit-learn>=1.6,<2",
+  "joblib>=1.4",
+  "psycopg[binary]>=3.2,<4",
+]
+
+[project.optional-dependencies]
+tracking = ["mlflow-skinny==3.16.1", "skops>=0.16,<1", "confluent-kafka>=2.6,<3"]
+
+[tool.setuptools.packages.find]
+include = ["telco_ml*"]

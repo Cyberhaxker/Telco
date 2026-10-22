@@ -1,0 +1,14 @@
+Metadata-Version: 2.4
+Name: ingestion-api
+Version: 1.0.0
+Summary: Data entry, batch validation and Kafka publishing for the Telco platform
+License: MIT
+Requires-Python: >=3.12
+Requires-Dist: telco-common
+Requires-Dist: uvicorn[standard]<1,>=0.32
+Requires-Dist: sqlalchemy<2.1,>=2.0.40
+Requires-Dist: alembic<2,>=1.14
+Requires-Dist: pymysql<2,>=1.1
+Requires-Dist: cryptography>=44
+Requires-Dist: confluent-kafka<3,>=2.6
+Requires-Dist: python-multipart>=0.0.20

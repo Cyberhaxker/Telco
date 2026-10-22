@@ -1,0 +1,394 @@
+{
+ "uid": "telco-platform",
+ "title": "Telco platform overview",
+ "schemaVersion": 39,
+ "version": 1,
+ "refresh": "30s",
+ "time": {
+  "from": "now-6h",
+  "to": "now"
+ },
+ "tags": [
+  "telco"
+ ],
+ "panels": [
+  {
+   "type": "stat",
+   "title": "API requests / s",
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 6,
+    "h": 4
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "reqps"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "expr": "sum(rate(http_requests_total[5m]))",
+     "refId": "A"
+    }
+   ],
+   "id": 1
+  },
+  {
+   "type": "stat",
+   "title": "API 5xx ratio",
+   "gridPos": {
+    "x": 6,
+    "y": 0,
+    "w": 6,
+    "h": 4
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_requests_total[5m])),1e-9)",
+     "refId": "A"
+    }
+   ],
+   "id": 2
+  },
+  {
+   "type": "stat",
+   "title": "Kafka consumer lag",
+   "gridPos": {
+    "x": 12,
+    "y": 0,
+    "w": 6,
+    "h": 4
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "expr": "sum(kafka_consumergroup_lag{consumergroup=\"dw-stream-consumer\"})",
+     "refId": "A"
+    }
+   ],
+   "id": 3
+  },
+  {
+   "type": "stat",
+   "title": "Airflow task failures (24h)",
+   "gridPos": {
+    "x": 18,
+    "y": 0,
+    "w": 6,
+    "h": 4
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "expr": "sum(increase(airflow_ti_failures[24h]))",
+     "refId": "A"
+    }
+   ],
+   "id": 4
+  },
+  {
+   "type": "timeseries",
+   "title": "API latency p95 by service",
+   "gridPos": {
+    "x": 0,
+    "y": 4,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "expr": "histogram_quantile(0.95, sum by (le, service) (rate(http_request_duration_seconds_bucket[5m])))",
+     "legendFormat": "{{service}}",
+     "refId": "A"
+    }
+   ],
+   "id": 5
+  },
+  {
+   "type": "timeseries",
+   "title": "API error rate by service",
+   "gridPos": {
+    "x": 12,
+    "y": 4,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "expr": "sum by (service) (rate(http_requests_total{status=~\"5..\"}[5m])) / clamp_min(sum by (service) (rate(http_requests_total[5m])),1e-9)",
+     "legendFormat": "{{service}}",
+     "refId": "A"
+    }
+   ],
+   "id": 6
+  },
+  {
+   "type": "timeseries",
+   "title": "Gateway responses by status",
+   "gridPos": {
+    "x": 0,
+    "y": 12,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "expr": "sum by (code) (rate(apisix_http_status[5m]))",
+     "legendFormat": "{{code}}",
+     "refId": "A"
+    }
+   ],
+   "id": 7
+  },
+  {
+   "type": "timeseries",
+   "title": "Kafka consumer lag by topic",
+   "gridPos": {
+    "x": 12,
+    "y": 12,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "expr": "sum by (topic) (kafka_consumergroup_lag)",
+     "legendFormat": "{{topic}}",
+     "refId": "A"
+    }
+   ],
+   "id": 8
+  },
+  {
+   "type": "timeseries",
+   "title": "Stream consumer messages",
+   "gridPos": {
+    "x": 0,
+    "y": 20,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "expr": "sum by (result) (rate(stream_consumer_messages_total[5m]))",
+     "legendFormat": "{{result}}",
+     "refId": "A"
+    }
+   ],
+   "id": 9
+  },
+  {
+   "type": "timeseries",
+   "title": "DAG run outcomes",
+   "gridPos": {
+    "x": 12,
+    "y": 20,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "expr": "sum by (dag_id) (increase(airflow_dagrun_duration_success_count[1h]))",
+     "legendFormat": "{{dag_id}} success",
+     "refId": "A"
+    }
+   ],
+   "id": 10
+  },
+  {
+   "type": "table",
+   "title": "Data freshness",
+   "gridPos": {
+    "x": 0,
+    "y": 28,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "warehouse"
+   },
+   "targets": [
+    {
+     "rawSql": "select dataset_id, row_count, last_refreshed_at, now() - last_refreshed_at as age from meta.datasets where layer in ('marts','olap') order by last_refreshed_at nulls first",
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "refId": "A"
+    }
+   ],
+   "id": 11
+  },
+  {
+   "type": "table",
+   "title": "Latest data-quality runs",
+   "gridPos": {
+    "x": 12,
+    "y": 28,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "warehouse"
+   },
+   "targets": [
+    {
+     "rawSql": "select started_at, source, status, passed, failed, warned from meta.dq_runs order by started_at desc limit 10",
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "refId": "A"
+    }
+   ],
+   "id": 12
+  },
+  {
+   "type": "table",
+   "title": "Model metrics (latest training)",
+   "gridPos": {
+    "x": 0,
+    "y": 36,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "warehouse"
+   },
+   "targets": [
+    {
+     "rawSql": "select algorithm, (holdout_metrics->>'f1')::numeric(6,4) f1, (holdout_metrics->>'roc_auc')::numeric(6,4) roc_auc, is_champion, trained_at from ml.model_runs order by trained_at desc limit 8",
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "refId": "A"
+    }
+   ],
+   "id": 13
+  },
+  {
+   "type": "table",
+   "title": "Feature drift (PSI)",
+   "gridPos": {
+    "x": 12,
+    "y": 36,
+    "w": 12,
+    "h": 8
+   },
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "warehouse"
+   },
+   "targets": [
+    {
+     "rawSql": "select feature, psi, status, computed_at from ml.drift_metrics where scoring_run_id = (select scoring_run_id from ml.drift_metrics order by computed_at desc limit 1) order by psi desc",
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "refId": "A"
+    }
+   ],
+   "id": 14
+  }
+ ],
+ "templating": {
+  "list": []
+ },
+ "annotations": {
+  "list": []
+ }
+}

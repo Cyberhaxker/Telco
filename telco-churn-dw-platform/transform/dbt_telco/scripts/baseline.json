@@ -1,0 +1,19 @@
+{
+  "description": "Expected warehouse state after the first pipeline run on the IBM Telco sample (7,043 customers).",
+  "row_counts": {
+    "marts.dim_customer": 7043,
+    "marts.dim_contract": 6,
+    "marts.dim_service": 322,
+    "marts.dim_payment": 4,
+    "marts.dim_churn": 2,
+    "marts.fact_customer_churn": 7043
+  },
+  "churn_counts": { "No": 5174, "Yes": 1869 },
+  "olap": [
+    { "name": "Month-to-month churn", "sql": "select churned_count, customer_count from olap.mv_churn_by_contract_payment where contract_type = 'Month-to-month' and payment_method = '(All)'", "expected": [1655, 3875] },
+    { "name": "One year churn", "sql": "select churned_count, customer_count from olap.mv_churn_by_contract_payment where contract_type = 'One year' and payment_method = '(All)'", "expected": [166, 1473] },
+    { "name": "Two year churn", "sql": "select churned_count, customer_count from olap.mv_churn_by_contract_payment where contract_type = 'Two year' and payment_method = '(All)'", "expected": [48, 1695] },
+    { "name": "Tenure 0-12 churn", "sql": "select churned_count, customer_count from olap.mv_churn_by_tenure_band where tenure_band = '0-12'", "expected": [1037, 2186] },
+    { "name": "Electronic check churn", "sql": "select churned_count, customer_count from olap.mv_churn_cube where grouping_id = 11 and payment_method = 'Electronic check'", "expected": [1071, 2365] }
+  ]
+}

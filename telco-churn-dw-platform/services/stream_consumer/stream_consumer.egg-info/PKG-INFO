@@ -1,0 +1,11 @@
+Metadata-Version: 2.4
+Name: stream-consumer
+Version: 1.0.0
+Summary: Consumes validated ingest events from Kafka into the PostgreSQL raw schema
+License: MIT
+Requires-Python: >=3.12
+Requires-Dist: telco-common
+Requires-Dist: aiokafka[lz4]<1,>=0.12
+Requires-Dist: psycopg[binary]<4,>=3.2
+Requires-Dist: psycopg-pool<4,>=3.2
+Requires-Dist: prometheus-client<1,>=0.21

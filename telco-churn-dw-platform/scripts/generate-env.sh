@@ -22,15 +22,28 @@ while IFS= read -r line; do
   fi
 done < .env.example > .env
 
-# Avoid clashes with services already listening on this machine.
+# Avoid clashes with services already listening on this machine: walk upwards
+# from the default until a free port is found.
 port_busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
-for pair in POSTGRES_PORT:5432:5434 MYSQL_PORT:3306:3307 KAFKA_PORT:9092:9093; do
-  IFS=: read -r var default alt <<<"$pair"
-  if port_busy "$default"; then
-    sed -i "s/^${var}=${default}$/${var}=${alt}/" .env
-    echo "port ${default} is busy - ${var} set to ${alt}"
+taken=" "
+for var in WEB_PORT APISIX_PORT KEYCLOAK_PORT AIRFLOW_PORT MLFLOW_PORT GRAFANA_PORT PROMETHEUS_PORT POSTGRES_PORT MYSQL_PORT KAFKA_PORT; do
+  default=$(grep "^${var}=" .env | cut -d= -f2)
+  port=$default
+  while port_busy "$port" || [[ "$taken" == *" $port "* ]]; do
+    port=$((port + 1))
+  done
+  taken+="$port "
+  if [[ "$port" != "$default" ]]; then
+    sed -i "s/^${var}=${default}$/${var}=${port}/" .env
+    echo "port ${default} is busy - ${var} set to ${port}"
   fi
 done
 
+# Keep URLs in step with any port that moved.
+set -a; source .env; set +a
+sed -i "s#^PUBLIC_WEB_URL=.*#PUBLIC_WEB_URL=http://localhost:${WEB_PORT}#; \
+        s#^PUBLIC_GATEWAY_URL=.*#PUBLIC_GATEWAY_URL=http://localhost:${APISIX_PORT}#; \
+        s#^PUBLIC_KEYCLOAK_URL=.*#PUBLIC_KEYCLOAK_URL=http://localhost:${KEYCLOAK_PORT}#" .env
+
 chmod 600 .env
-echo "Created .env with random secrets (demo user password: $(grep ^DEMO_USER_PASSWORD .env | cut -d= -f2))"
+echo "Created .env with random secrets. Demo user password: see DEMO_USER_PASSWORD in .env"

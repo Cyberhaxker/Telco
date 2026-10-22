@@ -1,0 +1,34 @@
+# TLS edge for production. Certificates are Docker secrets (see docker-compose.prod.yml).
+server {
+  listen 8080;
+  server_name ${PUBLIC_DOMAIN};
+  location /.well-known/acme-challenge/ { root /tmp/acme; }
+  location / { return 301 https://$host$request_uri; }
+}
+
+server {
+  listen 8443 ssl;
+  http2 on;
+  server_name ${PUBLIC_DOMAIN};
+
+  ssl_certificate     /run/secrets/tls_cert;
+  ssl_certificate_key /run/secrets/tls_key;
+  ssl_protocols TLSv1.2 TLSv1.3;
+  ssl_prefer_server_ciphers off;
+  ssl_session_cache shared:TLS:10m;
+  ssl_session_timeout 1d;
+
+  add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+  client_max_body_size 12m;
+
+  proxy_set_header Host $host;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto https;
+  proxy_set_header X-Forwarded-Host $host;
+  proxy_set_header X-Forwarded-Port 443;
+  proxy_set_header X-Request-ID $request_id;
+
+  location /auth/ { proxy_pass http://keycloak:8080; proxy_buffer_size 128k; proxy_buffers 4 256k; }
+  location /grafana/ { proxy_pass http://grafana:3000; }
+  location / { proxy_pass http://web:8080; proxy_read_timeout 130s; }
+}

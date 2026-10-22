@@ -1,0 +1,5 @@
+telco-common
+pymysql<2,>=1.1
+cryptography>=44
+psycopg[binary]<4,>=3.2
+confluent-kafka<3,>=2.6

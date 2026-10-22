@@ -1,0 +1,11 @@
+# Local PostgreSQL data directory and Python environments
+.pgdata/
+.telco/
+.venv/
+__pycache__/
+*.pyc
+
+# Secrets
+.env
+.env.*
+!.env.example

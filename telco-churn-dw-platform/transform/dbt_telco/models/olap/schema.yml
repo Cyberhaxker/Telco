@@ -1,0 +1,15 @@
+version: 2
+models:
+- name: churn_flat
+  description: Denormalised current fact (table), one row per customer; the source of ad-hoc OLAP queries and of the aggregate MVs.
+  columns:
+  - name: customer_id
+    data_tests:
+    - unique
+    - not_null
+- name: mv_churn_by_contract_payment
+  description: ROLLUP(contract_type, payment_method) with churn measures.
+- name: mv_churn_by_tenure_band
+  description: ROLLUP(tenure_band) with churn measures.
+- name: mv_churn_cube
+  description: CUBE over contract_type, payment_method, internet_service and tenure_band.

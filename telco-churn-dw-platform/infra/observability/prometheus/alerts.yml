@@ -1,0 +1,37 @@
+groups:
+  - name: telco-platform
+    rules:
+      - alert: ApiHighErrorRate
+        expr: sum by (service) (rate(http_requests_total{status=~"5.."}[5m])) / clamp_min(sum by (service) (rate(http_requests_total[5m])), 1e-9) > 0.05
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "{{ $labels.service }}: more than 5% of requests fail" }
+      - alert: ApiSlowP95
+        expr: histogram_quantile(0.95, sum by (le, service) (rate(http_request_duration_seconds_bucket[5m]))) > 1.5
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "{{ $labels.service }}: p95 latency above 1.5s" }
+      - alert: KafkaConsumerLagHigh
+        expr: sum by (consumergroup) (kafka_consumergroup_lag) > 5000
+        for: 15m
+        labels: { severity: warning }
+        annotations: { summary: "Consumer group {{ $labels.consumergroup }} is falling behind" }
+      - alert: StreamConsumerStalled
+        expr: time() - stream_consumer_last_success_timestamp > 3600 and on() sum(kafka_consumergroup_lag) > 0
+        for: 5m
+        labels: { severity: critical }
+        annotations: { summary: "stream-consumer has not committed a batch for an hour while messages are waiting" }
+      - alert: WarehouseStale
+        expr: time() - max(pg_stat_user_tables_last_autoanalyze{relname="fact_customer_churn"}) > 172800
+        for: 30m
+        labels: { severity: warning }
+        annotations: { summary: "fact_customer_churn has not been refreshed for two days" }
+      - alert: AirflowTaskFailures
+        expr: increase(airflow_ti_failures[1h]) > 0
+        labels: { severity: warning }
+        annotations: { summary: "Airflow task failures in the last hour" }
+      - alert: TargetDown
+        expr: up == 0
+        for: 5m
+        labels: { severity: critical }
+        annotations: { summary: "{{ $labels.job }} ({{ $labels.instance }}) is down" }

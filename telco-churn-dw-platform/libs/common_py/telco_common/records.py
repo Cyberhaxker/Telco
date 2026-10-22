@@ -22,22 +22,52 @@ YesNo = Literal["Yes", "No"]
 Addon = Literal["Yes", "No", "No internet service"]
 
 RECORD_FIELDS: tuple[str, ...] = (
-    "customer_id", "gender", "senior_citizen", "partner", "dependents", "tenure_months",
-    "phone_service", "multiple_lines", "internet_service", "online_security", "online_backup",
-    "device_protection", "tech_support", "streaming_tv", "streaming_movies", "contract_type",
-    "paperless_billing", "payment_method", "monthly_charges", "total_charges", "churned",
+    "customer_id",
+    "gender",
+    "senior_citizen",
+    "partner",
+    "dependents",
+    "tenure_months",
+    "phone_service",
+    "multiple_lines",
+    "internet_service",
+    "online_security",
+    "online_backup",
+    "device_protection",
+    "tech_support",
+    "streaming_tv",
+    "streaming_movies",
+    "contract_type",
+    "paperless_billing",
+    "payment_method",
+    "monthly_charges",
+    "total_charges",
+    "churned",
 )
 
 # IBM CSV header -> record field
 IBM_COLUMN_MAP: dict[str, str] = {
-    "customerID": "customer_id", "gender": "gender", "SeniorCitizen": "senior_citizen",
-    "Partner": "partner", "Dependents": "dependents", "tenure": "tenure_months",
-    "PhoneService": "phone_service", "MultipleLines": "multiple_lines",
-    "InternetService": "internet_service", "OnlineSecurity": "online_security",
-    "OnlineBackup": "online_backup", "DeviceProtection": "device_protection",
-    "TechSupport": "tech_support", "StreamingTV": "streaming_tv", "StreamingMovies": "streaming_movies",
-    "Contract": "contract_type", "PaperlessBilling": "paperless_billing", "PaymentMethod": "payment_method",
-    "MonthlyCharges": "monthly_charges", "TotalCharges": "total_charges", "Churn": "churned",
+    "customerID": "customer_id",
+    "gender": "gender",
+    "SeniorCitizen": "senior_citizen",
+    "Partner": "partner",
+    "Dependents": "dependents",
+    "tenure": "tenure_months",
+    "PhoneService": "phone_service",
+    "MultipleLines": "multiple_lines",
+    "InternetService": "internet_service",
+    "OnlineSecurity": "online_security",
+    "OnlineBackup": "online_backup",
+    "DeviceProtection": "device_protection",
+    "TechSupport": "tech_support",
+    "StreamingTV": "streaming_tv",
+    "StreamingMovies": "streaming_movies",
+    "Contract": "contract_type",
+    "PaperlessBilling": "paperless_billing",
+    "PaymentMethod": "payment_method",
+    "MonthlyCharges": "monthly_charges",
+    "TotalCharges": "total_charges",
+    "Churn": "churned",
 }
 
 
@@ -118,9 +148,13 @@ def business_rule_errors(rec: dict[str, Any], row: int) -> list[RowError]:
     total = rec.get("total_charges")
     if isinstance(tenure, int) and isinstance(monthly, (int, float)):
         if tenure > 0 and total is None:
-            errors.append(RowError(row, "total_charges", "required_when_tenure", "total_charges is required when tenure_months > 0"))
+            errors.append(
+                RowError(row, "total_charges", "required_when_tenure", "total_charges is required when tenure_months > 0")
+            )
         if tenure > 0 and isinstance(total, (int, float)) and total + 1e-9 < monthly:
-            errors.append(RowError(row, "total_charges", "lt_monthly", "total_charges must be >= monthly_charges when tenure_months > 0"))
+            errors.append(
+                RowError(row, "total_charges", "lt_monthly", "total_charges must be >= monthly_charges when tenure_months > 0")
+            )
     return errors
 
 

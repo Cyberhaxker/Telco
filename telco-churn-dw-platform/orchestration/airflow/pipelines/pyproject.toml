@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "telco-pipelines"
+version = "1.0.0"
+description = "ETL steps run by Airflow (seed, incremental extract, events)"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+dependencies = [
+  "telco-common",
+  "pymysql>=1.1,<2",
+  "cryptography>=44",
+  "psycopg[binary]>=3.2,<4",
+  "confluent-kafka>=2.6,<3",
+]
+
+[tool.setuptools.packages.find]
+include = ["pipelines*"]

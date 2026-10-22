@@ -1,0 +1,11 @@
+pyproject.toml
+stream_consumer/__init__.py
+stream_consumer/handlers.py
+stream_consumer/main.py
+stream_consumer/sink.py
+stream_consumer.egg-info/PKG-INFO
+stream_consumer.egg-info/SOURCES.txt
+stream_consumer.egg-info/dependency_links.txt
+stream_consumer.egg-info/requires.txt
+stream_consumer.egg-info/top_level.txt
+tests/test_handlers.py

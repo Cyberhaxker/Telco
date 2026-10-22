@@ -1,0 +1,15 @@
+Metadata-Version: 2.4
+Name: telco-ml
+Version: 1.0.0
+Summary: Churn model training, evaluation, registry promotion and batch scoring
+License: MIT
+Requires-Python: >=3.12
+Requires-Dist: pandas<3,>=2.2
+Requires-Dist: numpy<3,>=2.0
+Requires-Dist: scikit-learn<2,>=1.6
+Requires-Dist: joblib>=1.4
+Requires-Dist: psycopg[binary]<4,>=3.2
+Provides-Extra: tracking
+Requires-Dist: mlflow-skinny==3.16.1; extra == "tracking"
+Requires-Dist: skops<1,>=0.16; extra == "tracking"
+Requires-Dist: confluent-kafka<3,>=2.6; extra == "tracking"

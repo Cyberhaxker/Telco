@@ -18,6 +18,7 @@ INSERT INTO meta.datasets (dataset_id, name, layer, schema_name, table_name, des
  ('marts.dim_date',           'Date dimension',                'marts',   'marts',     'dim_date',            'Calendar 2010-2035', 'data_steward', 'dbt', '@daily'),
  ('marts.dim_tenure_band',    'Tenure band dimension',         'marts',   'marts',     'dim_tenure_band',     '0-12, 13-24, 25-48, 49-72 months', 'data_steward', 'dbt', '@daily'),
  ('marts.fact_customer_churn','Customer churn fact',           'marts',   'marts',     'fact_customer_churn', 'One row per current customer subscription snapshot', 'data_steward', 'dbt', '@daily'),
+ ('olap.churn_flat','Churn flat table','olap','olap','churn_flat','Denormalised current fact, one row per customer','analyst','dbt','@daily'),
  ('olap.mv_churn_by_contract_payment','Churn by contract & payment','olap','olap',    'mv_churn_by_contract_payment', 'Materialised aggregate', 'analyst', 'dbt', '@daily'),
  ('olap.mv_churn_by_tenure_band','Churn by tenure band',       'olap',    'olap',      'mv_churn_by_tenure_band', 'Materialised aggregate', 'analyst', 'dbt', '@daily'),
  ('olap.mv_churn_cube',       'Churn cube',                    'olap',    'olap',      'mv_churn_cube',       'CUBE over contract, payment, internet service, tenure band', 'analyst', 'dbt', '@daily'),

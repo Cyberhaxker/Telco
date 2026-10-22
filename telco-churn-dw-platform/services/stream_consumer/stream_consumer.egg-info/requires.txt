@@ -1,0 +1,5 @@
+telco-common
+aiokafka[lz4]<1,>=0.12
+psycopg[binary]<4,>=3.2
+psycopg-pool<4,>=3.2
+prometheus-client<1,>=0.21

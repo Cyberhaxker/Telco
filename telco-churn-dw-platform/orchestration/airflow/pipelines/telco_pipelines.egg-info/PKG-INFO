@@ -1,0 +1,11 @@
+Metadata-Version: 2.4
+Name: telco-pipelines
+Version: 1.0.0
+Summary: ETL steps run by Airflow (seed, incremental extract, events)
+License: MIT
+Requires-Python: >=3.12
+Requires-Dist: telco-common
+Requires-Dist: pymysql<2,>=1.1
+Requires-Dist: cryptography>=44
+Requires-Dist: psycopg[binary]<4,>=3.2
+Requires-Dist: confluent-kafka<3,>=2.6

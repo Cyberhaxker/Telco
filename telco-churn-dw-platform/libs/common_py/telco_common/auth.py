@@ -100,7 +100,9 @@ def require_roles(*roles: str) -> Callable[[Principal], Principal]:
     def guard(principal: CurrentPrincipal) -> Principal:
         if not principal.has_any(*roles):
             raise ProblemError(
-                403, "Forbidden", f"Requires one of the roles: {', '.join(roles)}",
+                403,
+                "Forbidden",
+                f"Requires one of the roles: {', '.join(roles)}",
                 required_roles=list(roles),
             )
         return principal

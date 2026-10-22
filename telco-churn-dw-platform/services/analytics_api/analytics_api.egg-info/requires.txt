@@ -1,0 +1,7 @@
+telco-common
+telco-ml
+uvicorn[standard]<1,>=0.32
+psycopg[binary]<4,>=3.2
+psycopg-pool<4,>=3.2
+redis<9,>=5.2
+aiokafka[lz4]<1,>=0.12

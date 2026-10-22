@@ -1,0 +1,8 @@
+telco-common
+uvicorn[standard]<1,>=0.32
+sqlalchemy<2.1,>=2.0.40
+alembic<2,>=1.14
+pymysql<2,>=1.1
+cryptography>=44
+confluent-kafka<3,>=2.6
+python-multipart>=0.0.20

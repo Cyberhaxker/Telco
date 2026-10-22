@@ -3,7 +3,7 @@
   "displayName": "Telco Churn Analytics",
   "enabled": true,
   "sslRequired": "external",
-  "registrationAllowed": false,
+  "registrationAllowed": true,
   "loginWithEmailAllowed": true,
   "resetPasswordAllowed": false,
   "bruteForceProtected": true,

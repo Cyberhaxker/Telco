@@ -26,3 +26,5 @@ transform/dbt_telco/dbt_packages/
 mlruns/
 ml/artifacts/
 infra/nginx/certs/*.pem
+apps/web/src/lib/generated/
+apps/web/src/contracts/

@@ -10,8 +10,9 @@ Stages
 
 Usage
   pip install pandas numpy scikit-learn matplotlib psycopg2-binary
-  export PGPASSWORD='your-password' # optional if trust auth
+  export PGPASSWORD='your-password' # the password is read only from the environment
   python build_churn_project_pg.py --config build_config_postgres.json
+  python build_churn_project_pg.py --drop             # rebuild: DROPS the existing database first
   python build_churn_project_pg.py --skip-db          # mining only, no PostgreSQL needed
   python build_churn_project_pg.py --only warehouse   # load, warehouse, analysis
 """
@@ -49,7 +50,10 @@ def load_source(cfg):
 def connect(cfg, with_db=True):
     import psycopg2
     p = cfg["postgres"]
-    pwd = p.get("password") or os.environ.get(p.get("password_env", "PGPASSWORD"), "")
+    if "password" in p:
+        sys.exit("Remove 'password' from the config file and export it as "
+                 f"{p.get('password_env', 'PGPASSWORD')} instead.")
+    pwd = os.environ.get(p.get("password_env", "PGPASSWORD"), "")
     kwargs = dict(
         host=p["host"],
         port=p["port"],
@@ -78,16 +82,17 @@ def build_dimension_frames(df, cfg):
     return frames
 
 
-def build_warehouse(df, cfg):
+def build_warehouse(df, cfg, drop=False):
     p = cfg["postgres"]
     wh = cfg["warehouse"]
     dbname = p["dbname"]
 
-    # create database if requested
+    # create database; an existing one is only dropped when explicitly asked for
     con_admin = connect(cfg, with_db=False)
     con_admin.autocommit = True
     cur_admin = con_admin.cursor()
-    if p.get("drop_existing", True):
+    if drop or p.get("drop_existing", False):
+        log(f"Dropping existing database {dbname}")
         # Terminate other connections if any
         cur_admin.execute(
             f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = %s AND pid <> pg_backend_pid();",
@@ -96,8 +101,12 @@ def build_warehouse(df, cfg):
         cur_admin.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
     cur_admin.execute(f'SELECT 1 FROM pg_database WHERE datname = %s', (dbname,))
     exists = cur_admin.fetchone()
-    if not exists:
-        cur_admin.execute(f'CREATE DATABASE "{dbname}"')
+    if exists:
+        cur_admin.close()
+        con_admin.close()
+        sys.exit(f"Database {dbname} already exists. Re-run with --drop to rebuild it "
+                 "(this deletes all of its data), or use --only mining.")
+    cur_admin.execute(f'CREATE DATABASE "{dbname}"')
     cur_admin.close()
     con_admin.close()
 
@@ -305,6 +314,8 @@ def main():
     ap.add_argument("--config", default="build_config_postgres.json")
     ap.add_argument("--skip-db", action="store_true", help="skip PostgreSQL warehouse + SQL analysis")
     ap.add_argument("--only", choices=["warehouse", "mining"], help="run just one half")
+    ap.add_argument("--drop", action="store_true",
+                    help="drop and rebuild the database if it already exists (destroys its data)")
     a = ap.parse_args()
 
     cfg = json.load(open(a.config))
@@ -314,7 +325,7 @@ def main():
     df = load_source(cfg)
 
     if a.only != "mining" and not a.skip_db:
-        con = build_warehouse(df, cfg)
+        con = build_warehouse(df, cfg, drop=a.drop)
         validate_warehouse(con, cfg, out_dir)
         run_analysis(con, cfg, out_dir)
         con.close()

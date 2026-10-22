@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push: { branches: [main] }
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python lint + tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Install
+        run: |
+          pip install pytest pytest-cov pytest-asyncio httpx ruff mypy
+          pip install -e libs/common_py -e services/ingestion_api -e services/stream_consumer \
+                      -e services/metadata_api -e ml -e services/analytics_api -e orchestration/airflow/pipelines
+      - name: Ruff
+        run: ruff check . && ruff format --check .
+      - name: Mypy
+        run: mypy libs/common_py services/ingestion_api/ingestion_api services/analytics_api/analytics_api services/metadata_api/metadata_api
+      - name: Unit tests
+        run: python -m pytest -m "not integration" --cov --cov-report=term-missing --cov-fail-under=80
+
+  warehouse:
+    name: Warehouse image + dbt build + reconciliation
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create .env
+        run: ./scripts/generate-env.sh
+      - name: Build and start the warehouse
+        run: docker compose -p telco-dw -f docker-compose.dw.yml up -d --build --wait --wait-timeout 300
+      - name: dbt seed + build + tests + strict reconciliation
+        run: docker compose -p telco-dw -f docker-compose.dw.yml --profile tools run --rm dbt-bootstrap bash -c "scripts/build.sh && python scripts/publish_dq.py && python scripts/reconcile.py --strict"
+      - name: Second run (incremental + snapshot) must also pass
+        run: docker compose -p telco-dw -f docker-compose.dw.yml --profile tools run --rm dbt-bootstrap bash -c "dbt build && python scripts/refresh_olap.py"
+      - name: Integration tests against the warehouse
+        run: |
+          set -a; source .env; set +a
+          NET=telco-dw_default
+          docker build -t telco/pytest:ci -f tests/docker/Dockerfile.pytest tests/docker
+          docker run --rm --network $NET -v "$PWD:/repo" -w /repo \
+            -e DW_TEST_DSN="postgresql://dw_analytics:${DW_ANALYTICS_PASSWORD}@dw-postgres:5432/telco_churn_dw" \
+            -e DW_TEST_META_DSN="postgresql://dw_meta:${DW_META_PASSWORD}@dw-postgres:5432/telco_churn_dw" \
+            telco/pytest:ci bash tests/docker/run-pytest.sh -m integration services/analytics_api/tests services/metadata_api/tests
+      - name: Logs on failure
+        if: failure()
+        run: docker compose -p telco-dw -f docker-compose.dw.yml logs --tail=200
+
+  web:
+    name: PWA lint + typecheck + tests + build
+    runs-on: ubuntu-24.04
+    defaults: { run: { working-directory: apps/web } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: npm, cache-dependency-path: apps/web/package-lock.json }
+      - run: npm ci
+      - run: npm run sync-contracts
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  images:
+    name: Build all Docker images
+    runs-on: ubuntu-24.04
+    needs: [python, web]
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./scripts/generate-env.sh
+      - name: Build
+        run: docker compose --profile airflow --profile ml --profile ml-oneshot --profile observability build
+      - name: Validate compose files
+        run: |
+          docker compose --profile airflow --profile ml --profile observability config -q
+          touch infra/nginx/certs/fullchain.pem infra/nginx/certs/privkey.pem
+          PUBLIC_DOMAIN=ci.example.com docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile airflow config -q

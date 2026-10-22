@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: analytics-api
+Version: 1.0.0
+Summary: OLAP, KPI, prediction and model endpoints for the Telco platform
+License: MIT
+Requires-Python: >=3.12
+Requires-Dist: telco-common
+Requires-Dist: telco-ml
+Requires-Dist: uvicorn[standard]<1,>=0.32
+Requires-Dist: psycopg[binary]<4,>=3.2
+Requires-Dist: psycopg-pool<4,>=3.2
+Requires-Dist: redis<9,>=5.2
+Requires-Dist: aiokafka[lz4]<1,>=0.12

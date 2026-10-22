@@ -1,0 +1,21 @@
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+  - name: Warehouse
+    uid: warehouse
+    type: grafana-postgresql-datasource
+    access: proxy
+    url: dw-postgres:5432
+    user: dw_analytics
+    jsonData: { database: ${DW_DB}, sslmode: disable, postgresVersion: 1800, timescaledb: false }
+    secureJsonData: { password: ${DW_ANALYTICS_PASSWORD} }

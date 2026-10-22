@@ -1,0 +1,26 @@
+[tool.pytest.ini_options]
+markers = ["integration: needs running databases / Docker"]
+testpaths = ["libs/common_py/tests", "services", "ml/tests"]
+filterwarnings = ["ignore::DeprecationWarning:starlette.*"]
+
+[tool.coverage.run]
+source = ["libs/common_py/telco_common", "services/ingestion_api/ingestion_api", "services/analytics_api/analytics_api",
+          "services/metadata_api/metadata_api", "services/stream_consumer/stream_consumer", "ml/telco_ml"]
+
+[tool.ruff]
+line-length = 130
+target-version = "py312"
+extend-exclude = ["services/ingestion_api/migrations", "orchestration/airflow/dags/__pycache__"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "BLE", "SIM"]
+ignore = ["S101", "S311", "S608", "B008", "UP046"]  # UP046: pydantic generics use typing.Generic
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S105", "S106", "E501"]
+"orchestration/airflow/pipelines/**" = ["E501"]  # long SQL literals
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_unused_ignores = false

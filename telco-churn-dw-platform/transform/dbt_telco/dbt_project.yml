@@ -1,0 +1,44 @@
+name: dbt_telco
+version: "1.0.0"
+config-version: 2
+profile: telco
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+snapshot-paths: ["snapshots"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+clean-targets: ["target", "dbt_packages"]
+
+vars:
+  # Customers loaded from these sources are merged; on equal timestamps the
+  # higher priority wins.
+  source_priority: { ops: 3, stream: 2, csv: 1 }
+
+models:
+  dbt_telco:
+    +persist_docs: { relation: true, columns: true }
+    staging:
+      +schema: staging
+      +materialized: view
+    intermediate:
+      +schema: intermediate
+      +materialized: table
+    marts:
+      +schema: marts
+      +materialized: table
+    olap:
+      +schema: olap
+      +materialized: materialized_view
+      +on_configuration_change: apply
+    ml:
+      +schema: ml
+      +materialized: table
+
+seeds:
+  dbt_telco:
+    +schema: marts
+
+snapshots:
+  dbt_telco:
+    +schema: snapshots

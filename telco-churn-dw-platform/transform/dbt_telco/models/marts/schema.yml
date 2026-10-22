@@ -1,0 +1,169 @@
+version: 2
+models:
+- name: dim_customer
+  description: Customer dimension (SCD Type 2). Exactly one is_current row per customer.
+  columns:
+  - name: customer_key
+    description: Surrogate key of the customer version.
+    data_tests:
+    - unique
+    - not_null
+  - name: customer_id
+    description: Natural key from the operational system.
+    data_tests:
+    - not_null
+  - name: gender
+    data_tests:
+    - accepted_values:
+        arguments:
+          values:
+          - Female
+          - Male
+  - name: is_current
+    data_tests:
+    - not_null
+- name: dim_contract
+  columns:
+  - name: contract_key
+    data_tests:
+    - unique
+    - not_null
+  - name: contract_type
+    data_tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values:
+          - Month-to-month
+          - One year
+          - Two year
+- name: dim_service
+  columns:
+  - name: service_key
+    data_tests:
+    - unique
+    - not_null
+  - name: internet_service
+    data_tests:
+    - accepted_values:
+        arguments:
+          values:
+          - DSL
+          - Fiber optic
+          - 'No'
+- name: dim_payment
+  columns:
+  - name: payment_key
+    data_tests:
+    - unique
+    - not_null
+  - name: payment_method
+    data_tests:
+    - unique
+    - accepted_values:
+        arguments:
+          values:
+          - Electronic check
+          - Mailed check
+          - Bank transfer (automatic)
+          - Credit card (automatic)
+- name: dim_churn
+  columns:
+  - name: churn_key
+    data_tests:
+    - unique
+    - not_null
+  - name: churn_flag
+    data_tests:
+    - unique
+    - accepted_values:
+        arguments:
+          values:
+          - 0
+          - 1
+          quote: false
+- name: dim_date
+  columns:
+  - name: date_key
+    data_tests:
+    - unique
+    - not_null
+- name: dim_tenure_band
+  columns:
+  - name: tenure_band_key
+    data_tests:
+    - unique
+    - not_null
+  - name: band_label
+    data_tests:
+    - unique
+    - accepted_values:
+        arguments:
+          values:
+          - 0-12
+          - 13-24
+          - 25-48
+          - 49-72
+- name: fact_customer_churn
+  description: One row per current customer subscription for the load date.
+  columns:
+  - name: customer_key
+    data_tests:
+    - unique
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_customer')
+          field: customer_key
+  - name: contract_key
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_contract')
+          field: contract_key
+  - name: service_key
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_service')
+          field: service_key
+  - name: payment_key
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_payment')
+          field: payment_key
+  - name: churn_key
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_churn')
+          field: churn_key
+  - name: date_key
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_date')
+          field: date_key
+  - name: tenure_band_key
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_tenure_band')
+          field: tenure_band_key
+  - name: monthly_charges
+    data_tests:
+    - not_null
+  - name: customer_count
+    data_tests:
+    - accepted_values:
+        arguments:
+          values:
+          - 1
+          quote: false

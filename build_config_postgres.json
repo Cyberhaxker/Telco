@@ -21,10 +21,9 @@
     "host": "127.0.0.1",
     "port": 5433,
     "user": "postgres",
-    "password": "mamboc001dev_",
     "password_env": "PGPASSWORD",
     "dbname": "telco_churn_dw",
-    "drop_existing": true
+    "drop_existing": false
   },
   "warehouse": {
     "grain": "one fact row per customer",

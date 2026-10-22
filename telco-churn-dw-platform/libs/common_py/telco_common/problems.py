@@ -75,8 +75,12 @@ def install_problem_handlers(app: FastAPI) -> None:
             for e in exc.errors()
         ]
         return problem_response(
-            request, 422, "Unprocessable Content", "Request validation failed",
-            type_="https://telco.local/problems/validation", errors=errors,
+            request,
+            422,
+            "Unprocessable Content",
+            "Request validation failed",
+            type_="https://telco.local/problems/validation",
+            errors=errors,
         )
 
     @app.exception_handler(Exception)

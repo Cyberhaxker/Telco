@@ -2,18 +2,32 @@ import csv
 from pathlib import Path
 
 import pytest
-
 from telco_common.records import from_ibm_csv_row, validate_record
 
 ROOT = Path(__file__).resolve().parents[3]
 
 GOOD = {
-    "customer_id": "1234-ABCDE", "gender": "Female", "senior_citizen": 0, "partner": "Yes",
-    "dependents": "No", "tenure_months": 5, "phone_service": "Yes", "multiple_lines": "No",
-    "internet_service": "Fiber optic", "online_security": "No", "online_backup": "Yes",
-    "device_protection": "No", "tech_support": "No", "streaming_tv": "Yes", "streaming_movies": "No",
-    "contract_type": "Month-to-month", "paperless_billing": "Yes", "payment_method": "Electronic check",
-    "monthly_charges": 80.5, "total_charges": 402.5, "churned": False,
+    "customer_id": "1234-ABCDE",
+    "gender": "Female",
+    "senior_citizen": 0,
+    "partner": "Yes",
+    "dependents": "No",
+    "tenure_months": 5,
+    "phone_service": "Yes",
+    "multiple_lines": "No",
+    "internet_service": "Fiber optic",
+    "online_security": "No",
+    "online_backup": "Yes",
+    "device_protection": "No",
+    "tech_support": "No",
+    "streaming_tv": "Yes",
+    "streaming_movies": "No",
+    "contract_type": "Month-to-month",
+    "paperless_billing": "Yes",
+    "payment_method": "Electronic check",
+    "monthly_charges": 80.5,
+    "total_charges": 402.5,
+    "churned": False,
 }
 
 

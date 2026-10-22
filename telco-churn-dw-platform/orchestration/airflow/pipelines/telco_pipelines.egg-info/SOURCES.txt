@@ -1,0 +1,12 @@
+pyproject.toml
+pipelines/__init__.py
+pipelines/conn.py
+pipelines/emit_event.py
+pipelines/extract_ops.py
+pipelines/seed_csv.py
+telco_pipelines.egg-info/PKG-INFO
+telco_pipelines.egg-info/SOURCES.txt
+telco_pipelines.egg-info/dependency_links.txt
+telco_pipelines.egg-info/requires.txt
+telco_pipelines.egg-info/top_level.txt
+tests/test_extract.py

@@ -225,11 +225,28 @@ CREATE TABLE ml.predictions (
 );
 CREATE INDEX ix_predictions_customer ON ml.predictions (customer_id, scored_at DESC);
 CREATE INDEX ix_predictions_run ON ml.predictions (scoring_run_id);
+CREATE INDEX ix_predictions_scored ON ml.predictions (scored_at);
+COMMENT ON TABLE ml.predictions IS
+  'Prediction history. Scoring prunes rows older than ML_PREDICTION_RETENTION_DAYS; read current values from ml.current_predictions';
 
+-- One row per customer, upserted by every scoring run, so reads never scan history.
+CREATE TABLE ml.current_predictions (
+    customer_id       varchar(20) PRIMARY KEY,
+    prediction_id     bigint NOT NULL,
+    scoring_run_id    uuid NOT NULL,
+    model_name        text NOT NULL,
+    model_version     text NOT NULL,
+    churn_probability numeric(6,5) NOT NULL CHECK (churn_probability BETWEEN 0 AND 1),
+    predicted_label   smallint NOT NULL,
+    risk_band         text NOT NULL CHECK (risk_band IN ('low','medium','high')),
+    top_factors       jsonb NOT NULL DEFAULT '[]'::jsonb,
+    scored_at         timestamptz NOT NULL
+);
+CREATE INDEX ix_current_predictions_risk ON ml.current_predictions (risk_band, churn_probability DESC);
+
+-- Kept for compatibility with earlier queries.
 CREATE VIEW ml.v_latest_predictions AS
-SELECT DISTINCT ON (customer_id) *
-FROM ml.predictions
-ORDER BY customer_id, scored_at DESC, prediction_id DESC;
+SELECT * FROM ml.current_predictions;
 
 CREATE TABLE ml.drift_metrics (
     id            bigserial PRIMARY KEY,
@@ -262,7 +279,7 @@ BEGIN
     UPDATE marts.fact_customer_churn f
        SET churn_probability = p.churn_probability
       FROM marts.dim_customer c
-      JOIN ml.v_latest_predictions p ON p.customer_id = c.customer_id
+      JOIN ml.current_predictions p ON p.customer_id = c.customer_id
      WHERE f.customer_key = c.customer_key
        AND f.churn_probability IS DISTINCT FROM p.churn_probability;
     GET DIAGNOSTICS n = ROW_COUNT;
@@ -278,7 +295,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA ml TO dw_ml;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA ml TO dw_ml;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA meta TO dw_meta;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA meta TO dw_meta;
-GRANT SELECT ON ml.model_runs, ml.v_latest_predictions TO dw_meta;
+GRANT SELECT ON ml.model_runs, ml.current_predictions, ml.v_latest_predictions TO dw_meta;
 GRANT USAGE ON SCHEMA ml TO dw_meta;
 
 RESET ROLE;

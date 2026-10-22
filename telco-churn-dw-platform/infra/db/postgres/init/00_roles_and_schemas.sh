@@ -7,24 +7,28 @@ set -euo pipefail
 : "${DW_ANALYTICS_PASSWORD:?DW_ANALYTICS_PASSWORD is required}"
 : "${DW_META_PASSWORD:?DW_META_PASSWORD is required}"
 : "${DW_ML_PASSWORD:?DW_ML_PASSWORD is required}"
+: "${DW_MONITOR_PASSWORD:?DW_MONITOR_PASSWORD is required}"
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
   -v owner_pw="$DW_OWNER_PASSWORD" -v ingest_pw="$DW_INGEST_PASSWORD" \
   -v analytics_pw="$DW_ANALYTICS_PASSWORD" -v meta_pw="$DW_META_PASSWORD" -v ml_pw="$DW_ML_PASSWORD" \
-  -v db="$POSTGRES_DB" <<'SQL'
+  -v monitor_pw="$DW_MONITOR_PASSWORD" -v db="$POSTGRES_DB" <<'SQL'
 CREATE ROLE dw_owner     LOGIN PASSWORD :'owner_pw';
 CREATE ROLE dw_ingest    LOGIN PASSWORD :'ingest_pw'    CONNECTION LIMIT 20;
 CREATE ROLE dw_analytics LOGIN PASSWORD :'analytics_pw' CONNECTION LIMIT 40;
 CREATE ROLE dw_meta      LOGIN PASSWORD :'meta_pw'      CONNECTION LIMIT 20;
 CREATE ROLE dw_ml        LOGIN PASSWORD :'ml_pw'        CONNECTION LIMIT 10;
+-- Prometheus postgres-exporter: server statistics only, no data access.
+CREATE ROLE dw_monitor   LOGIN PASSWORD :'monitor_pw'   CONNECTION LIMIT 3 IN ROLE pg_monitor;
 
 ALTER ROLE dw_analytics SET default_transaction_read_only = on;
 ALTER ROLE dw_analytics SET statement_timeout = '30s';
 ALTER ROLE dw_meta SET statement_timeout = '30s';
+ALTER ROLE dw_monitor SET statement_timeout = '10s';
 
 REVOKE ALL ON DATABASE :"db" FROM PUBLIC;
-GRANT CONNECT ON DATABASE :"db" TO dw_owner, dw_ingest, dw_analytics, dw_meta, dw_ml;
-GRANT CREATE ON DATABASE :"db" TO dw_owner;
+GRANT CONNECT ON DATABASE :"db" TO dw_owner, dw_ingest, dw_analytics, dw_meta, dw_ml, dw_monitor;
+GRANT CREATE, TEMPORARY ON DATABASE :"db" TO dw_owner;
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 
 CREATE EXTENSION IF NOT EXISTS pg_stat_statements;

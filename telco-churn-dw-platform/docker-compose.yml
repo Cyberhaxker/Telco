@@ -59,20 +59,17 @@ x-airflow: &airflow
     AIRFLOW_CONN_OPS_MYSQL_RW: mysql://ops_app:${OPS_APP_PASSWORD}@mysql:3306/${OPS_DB}
     AIRFLOW_CONN_DW_POSTGRES: postgresql://dw_owner:${DW_OWNER_PASSWORD}@dw-postgres:5432/${DW_DB}
     KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-    DBT_PROFILES_DIR: /opt/airflow/dbt_telco
-    DBT_PROJECT_DIR: /opt/airflow/dbt_telco
-    DBT_TARGET_PATH: /opt/airflow/dbt_artifacts/target
     DW_HOST: dw-postgres
     DW_PORT: "5432"
     DW_DB: ${DW_DB}
     DW_OWNER_PASSWORD: ${DW_OWNER_PASSWORD}
-    DW_ML_PASSWORD: ${DW_ML_PASSWORD}
+    DW_ML_DSN: postgresql://dw_ml:${DW_ML_PASSWORD}@dw-postgres:5432/${DW_DB}
     MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI}
     ML_MODEL_NAME: ${ML_MODEL_NAME}
     ML_CHAMPION_METRIC: ${ML_CHAMPION_METRIC}
     ML_MIN_ROC_AUC: ${ML_MIN_ROC_AUC}
     ML_HIGH_RISK_THRESHOLD: ${ML_HIGH_RISK_THRESHOLD}
-    ML_MODEL_DIR: /models
+    ML_PREDICTION_RETENTION_DAYS: ${ML_PREDICTION_RETENTION_DAYS}
     SEED_CSV_PATH: /opt/airflow/data/raw/Telco-Customer-Churn.csv
     ALERT_WEBHOOK_URL: ${AIRFLOW_ALERT_WEBHOOK_URL}
     ALERT_EMAIL: ${AIRFLOW_ALERT_EMAIL}
@@ -104,6 +101,7 @@ services:
       DW_ANALYTICS_PASSWORD: ${DW_ANALYTICS_PASSWORD}
       DW_META_PASSWORD: ${DW_META_PASSWORD}
       DW_ML_PASSWORD: ${DW_ML_PASSWORD}
+      DW_MONITOR_PASSWORD: ${DW_MONITOR_PASSWORD}
     ports: ["${POSTGRES_PORT}:5432"]
     volumes: [dw-data:/var/lib/postgresql]
     shm_size: 256mb
@@ -142,6 +140,7 @@ services:
       MYSQL_DATABASE: ${OPS_DB}
       OPS_APP_PASSWORD: ${OPS_APP_PASSWORD}
       OPS_EXTRACT_PASSWORD: ${OPS_EXTRACT_PASSWORD}
+      OPS_MONITOR_PASSWORD: ${OPS_MONITOR_PASSWORD}
     ports: ["${MYSQL_PORT}:3306"]
     volumes:
       - mysql-data:/var/lib/mysql
@@ -256,6 +255,7 @@ services:
     networks: [backend, edge]
     entrypoint: ["/bin/bash", "/usr/local/apisix/conf/telco/render-and-start.sh"]
     environment:
+      APISIX_STAND_ALONE: "true"
       KEYCLOAK_REALM: ${KEYCLOAK_REALM}
       PUBLIC_KEYCLOAK_URL: ${PUBLIC_KEYCLOAK_URL}
       PUBLIC_WEB_URL: ${PUBLIC_WEB_URL}
@@ -266,7 +266,7 @@ services:
     depends_on:
       keycloak: { condition: service_healthy }
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9080/healthz >/dev/null"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9080 && printf 'GET /healthz HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '200 OK' <&3"]
       interval: 10s
       timeout: 5s
       retries: 20
@@ -341,6 +341,9 @@ services:
       ML_MODEL_NAME: ${ML_MODEL_NAME}
       ML_MODEL_DIR: /models
       ML_HIGH_RISK_THRESHOLD: ${ML_HIGH_RISK_THRESHOLD}
+      # Fail fast when MLflow is down; the local champion copy is used instead.
+      MLFLOW_HTTP_REQUEST_MAX_RETRIES: "1"
+      MLFLOW_HTTP_REQUEST_TIMEOUT: "10"
     volumes: [ml-models:/models:ro]
     depends_on:
       dw-postgres: { condition: service_healthy }
@@ -361,7 +364,7 @@ services:
       DW_OWNER_PASSWORD: ${DW_OWNER_PASSWORD}
       DBT_TARGET_PATH: /dbt_artifacts/target
     volumes: [dbt-artifacts:/dbt_artifacts]
-    command: ["bash", "-c", "dbt seed && dbt build && dbt docs generate"]
+    command: ["bash", "-c", "scripts/build.sh && python scripts/publish_dq.py && python scripts/reconcile.py"]
     depends_on:
       dw-postgres: { condition: service_healthy }
 
@@ -408,7 +411,7 @@ services:
     depends_on:
       airflow-init: { condition: service_completed_successfully }
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api/v2/version"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api/v2/monitor/health"]
       interval: 15s
       timeout: 10s
       retries: 20
@@ -434,6 +437,14 @@ services:
     depends_on:
       airflow-init: { condition: service_completed_successfully }
 
+  # Celery worker: only used by the production overlay (CeleryExecutor).
+  airflow-worker:
+    <<: *airflow
+    profiles: [airflow-celery]
+    command: celery worker
+    depends_on:
+      airflow-init: { condition: service_completed_successfully }
+
   # Seeds MySQL from the CSV and triggers the first warehouse run.
   airflow-bootstrap:
     <<: *airflow
@@ -442,8 +453,11 @@ services:
     entrypoint: []
     depends_on:
       airflow-scheduler: { condition: service_started }
+      airflow-dag-processor: { condition: service_started }
       airflow-apiserver: { condition: service_healthy }
       ingestion-api: { condition: service_healthy }
+      dbt-bootstrap: { condition: service_completed_successfully }
+      mlflow: { condition: service_healthy }
 
   # ======================================================================
   # Machine learning (profile: ml)
@@ -457,6 +471,14 @@ services:
     networks: [backend]
     environment:
       MLFLOW_BACKEND_STORE_URI: postgresql+psycopg2://mlflow:${PLATFORM_DB_PASSWORD}@platform-db:5432/mlflow
+      # Server-side GenAI job runner (7 huey workers, ~650 MB) is not used here.
+      MLFLOW_SERVER_ENABLE_JOB_EXECUTION: "false"
+      MLFLOW_SERVER_JOB_ENABLE_PERIODIC_TASKS: "false"
+      # MLflow 3 rejects unknown Host headers (DNS-rebinding protection); allow the
+      # service name used inside the network and the published localhost port.
+      MLFLOW_EXTRA_ARGS: >-
+        --allowed-hosts mlflow,mlflow:5000,localhost,localhost:${MLFLOW_PORT},127.0.0.1:${MLFLOW_PORT}
+        --cors-allowed-origins http://localhost:${MLFLOW_PORT}
     ports: ["${MLFLOW_PORT}:5000"]
     volumes: [mlflow-artifacts:/mlartifacts]
     depends_on: { platform-db: { condition: service_healthy } }
@@ -468,10 +490,11 @@ services:
       start_period: 20s
 
   # One-shot: train, register, promote and score (Airflow does this weekly/daily afterwards).
+  # With the airflow profile, training and scoring are scheduled by Airflow.
   ml-train:
     build: { context: ., dockerfile: ml/Dockerfile }
     image: telco/ml:${IMAGE_TAG:-dev}
-    profiles: [ml]
+    profiles: [ml-oneshot]
     networks: [backend]
     restart: "no"
     environment:
@@ -481,6 +504,7 @@ services:
       ML_CHAMPION_METRIC: ${ML_CHAMPION_METRIC}
       ML_MIN_ROC_AUC: ${ML_MIN_ROC_AUC}
       ML_HIGH_RISK_THRESHOLD: ${ML_HIGH_RISK_THRESHOLD}
+      ML_PREDICTION_RETENTION_DAYS: ${ML_PREDICTION_RETENTION_DAYS}
       ML_MODEL_DIR: /models
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     volumes: [ml-models:/models]
@@ -539,7 +563,7 @@ services:
     restart: unless-stopped
     logging: *default-logging
     networks: [backend]
-    command: ["run", "/etc/alloy/config.alloy", "--storage.path=/var/lib/alloy/data"]
+    command: ["run", "/etc/alloy/config.alloy", "--storage.path=/tmp/alloy"]
     volumes:
       - ./infra/observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -551,16 +575,16 @@ services:
     restart: unless-stopped
     networks: [backend]
     environment:
-      DATA_SOURCE_NAME: postgresql://dw_analytics:${DW_ANALYTICS_PASSWORD}@dw-postgres:5432/${DW_DB}?sslmode=disable
+      DATA_SOURCE_NAME: postgresql://dw_monitor:${DW_MONITOR_PASSWORD}@dw-postgres:5432/${DW_DB}?sslmode=disable
 
   mysqld-exporter:
     image: prom/mysqld-exporter:v0.20.0
     profiles: [observability]
     restart: unless-stopped
     networks: [backend]
-    command: ["--mysqld.address=mysql:3306", "--mysqld.username=ops_extract"]
+    command: ["--mysqld.address=mysql:3306", "--mysqld.username=ops_monitor"]
     environment:
-      MYSQLD_EXPORTER_PASSWORD: ${OPS_EXTRACT_PASSWORD}
+      MYSQLD_EXPORTER_PASSWORD: ${OPS_MONITOR_PASSWORD}
 
   kafka-exporter:
     image: danielqsj/kafka-exporter:v1.9.0

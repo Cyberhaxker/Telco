@@ -1,0 +1,12 @@
+# Test runner image: Python 3.12 (same as the service images) with the
+# third-party dependencies of every Python package in the monorepo.
+FROM python:3.12.15-slim
+ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 PYTHONDONTWRITEBYTECODE=1
+WORKDIR /repo
+RUN pip install pytest pytest-cov pytest-asyncio httpx ruff mypy \
+ && pip install "fastapi>=0.115,<1" "pydantic>=2.10,<3" "pydantic-settings>=2.7,<3" "pyjwt[crypto]>=2.10,<3" \
+    "jsonschema>=4.23,<5" "prometheus-fastapi-instrumentator>=7.0,<9" "uvicorn[standard]>=0.32,<1" \
+    "sqlalchemy>=2.0.40,<2.1" "alembic>=1.14,<2" "pymysql>=1.1,<2" cryptography "confluent-kafka>=2.6,<3" \
+    "python-multipart>=0.0.20" "aiokafka>=0.12,<1" "psycopg[binary]>=3.2,<4" "psycopg-pool>=3.2,<4" \
+    "prometheus-client>=0.21,<1" "redis>=5.2,<9" "pandas>=2.2,<3" "scikit-learn>=1.6,<2" "joblib>=1.4"
+CMD ["bash", "/repo/tests/docker/run-pytest.sh"]

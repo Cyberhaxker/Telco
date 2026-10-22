@@ -1,0 +1,31 @@
+version: 2
+sources:
+- name: raw
+  schema: raw
+  description: Landing layer written by the warehouse image, Airflow and the stream consumer.
+  loaded_at_field: _loaded_at
+  tables:
+  - name: telco_csv_seed
+    description: IBM Telco CSV landed verbatim (all text) when the warehouse was initialised.
+  - name: ops_customers
+    description: Incremental extract of telco_ops.customers.
+    freshness:
+      warn_after:
+        count: 26
+        period: hour
+  - name: ops_subscriptions
+    description: Incremental extract of telco_ops.subscriptions.
+  - name: ops_subscription_services
+    description: Incremental extract of telco_ops.subscription_services.
+  - name: ingest_events
+    description: Validated events consumed from Kafka ingest topics.
+    columns:
+    - name: event_id
+      data_tests:
+      - unique
+      - not_null
+- name: ml
+  schema: ml
+  tables:
+  - name: current_predictions
+    description: Latest churn probability per customer from the champion model.
