@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="160" viewBox="0 0 640 160" role="img" aria-labelledby="t">
+  <title id="t">Telco Churn Analytics</title>
+  <rect x="0" y="0" width="160" height="160" rx="29" fill="#0e3b43"/>
+  <rect x="26" y="102" width="23" height="32" rx="2" fill="#e4eef0"/>
+  <rect x="56" y="80" width="23" height="54" rx="2" fill="#e4eef0"/>
+  <rect x="86" y="58" width="23" height="76" rx="2" fill="#e4eef0"/>
+  <rect x="116" y="36" width="23" height="98" rx="2" fill="#f2a93b"/>
+  <text x="184" y="76" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="46" font-weight="700" fill="#0e3b43">Telco Churn</text>
+  <text x="184" y="124" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="46" font-weight="700" fill="#f2a93b">Analytics</text>
+</svg>

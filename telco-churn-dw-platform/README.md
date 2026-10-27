@@ -1,3 +1,21 @@
+<p align="center">
+  <img src="docs/assets/logo.svg" alt="Telco Churn Analytics" width="420">
+</p>
+
+<p align="center">
+  <b>Offline-first churn analytics on a PostgreSQL star-schema data warehouse.</b><br>
+  <img alt="Next.js" src="https://img.shields.io/badge/Next.js-15-000000?logo=nextdotjs&logoColor=white">
+  <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white">
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-Pydantic_v2-009688?logo=fastapi&logoColor=white">
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white">
+  <img alt="Kafka" src="https://img.shields.io/badge/Kafka-KRaft-231F20?logo=apachekafka&logoColor=white">
+  <img alt="dbt" src="https://img.shields.io/badge/dbt-Core_1.12-FF694B?logo=dbt&logoColor=white">
+  <img alt="Airflow" src="https://img.shields.io/badge/Airflow-3.3-017CEE?logo=apacheairflow&logoColor=white">
+  <img alt="MLflow" src="https://img.shields.io/badge/MLflow-3-0194E2?logo=mlflow&logoColor=white">
+  <img alt="Docker" src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white">
+</p>
+
 # Telco Churn Analytics Platform
 
 An offline-capable Progressive Web App on top of a PostgreSQL star-schema data warehouse for telecom customer-churn analysis: data entry and CSV batches that work offline, validated ingestion through Kafka, dbt transformations orchestrated by Airflow, OLAP analysis (roll-up, drill-down, slice, dice, pivot) and churn prediction with scikit-learn and MLflow.
@@ -15,7 +33,8 @@ flowchart LR
   end
   PWA -->|static assets| NGINX["NGINX (web)"]
   NGINX -->|/api| APISIX["APISIX gateway<br/>OIDC · rate limits · CORS · cache"]
-  PWA -.->|PKCE login| KC["Keycloak"]
+  PWA -->|login| AUTH["Web auth routes<br/>bcrypt + JWT"]
+  PWA -.->|optional PKCE| KC["Keycloak (profile)"]
   APISIX -.->|JWKS| KC
   APISIX --> ING["ingestion-api"]
   APISIX --> META["metadata-api"]
@@ -35,7 +54,7 @@ flowchart LR
 
 | Layer | Path | Technology |
 |---|---|---|
-| PWA | `apps/web` | Next.js 15 (static export), TypeScript strict, Serwist, Dexie, ECharts, TanStack Table, oidc-client-ts |
+| PWA | `apps/web` | Next.js 15, React 19, TypeScript strict, Serwist, Dexie, ECharts, TanStack Table, jose (JWT sessions), oidc-client-ts |
 | APIs | `services/*_api` | FastAPI, Pydantic v2, SQLAlchemy 2 + Alembic (MySQL), psycopg 3 (PostgreSQL) |
 | Stream consumer | `services/stream_consumer` | aiokafka, idempotent upsert on `event_id` |
 | Shared contracts | `contracts/`, `libs/common_py` | JSON Schema 2020-12 used by browser, APIs and consumer |
@@ -43,8 +62,21 @@ flowchart LR
 | Orchestration | `orchestration/airflow` | Airflow 3.3 (LocalExecutor dev, CeleryExecutor prod), isolated venvs for dbt / ML / ETL |
 | ML | `ml/` | scikit-learn, MLflow 3 tracking + registry (aliases `champion`, `challenger`) |
 | Warehouse | `infra/db/postgres` | PostgreSQL 18, least-privilege roles, packaged as its own image |
-| Gateway / identity | `infra/apisix`, `infra/keycloak` | APISIX 3.19 standalone YAML, Keycloak 26 realm `telco` |
+| Gateway / identity | `infra/apisix`, `infra/keycloak` | APISIX 3.19 standalone YAML; built-in bcrypt + JWT login, Keycloak 26 realm `telco` as an optional profile |
 | Observability | `infra/observability` | Prometheus, Grafana OSS, Loki, Alloy |
+
+## Tech stack
+
+| Area | Tools |
+|---|---|
+| Frontend | Next.js 15, React 19, TypeScript, Serwist (service worker), Dexie (IndexedDB outbox), ECharts, TanStack Table |
+| Backend | Python, FastAPI, Pydantic v2, SQLAlchemy 2, Alembic, psycopg 3, aiokafka |
+| Data | PostgreSQL 18 (star schema, OLAP materialised views), MySQL 8.4 (operational source), Valkey (cache) |
+| Pipelines | Apache Kafka (KRaft), dbt Core, Apache Airflow |
+| Machine learning | scikit-learn, MLflow tracking and registry |
+| Edge and security | Apache APISIX, NGINX, JWT (jose), optional Keycloak |
+| Observability | Prometheus, Grafana, Loki, Alloy |
+| Tooling | Docker Compose, Make, pytest, Playwright, GitHub Actions |
 
 ## Quick start
 
