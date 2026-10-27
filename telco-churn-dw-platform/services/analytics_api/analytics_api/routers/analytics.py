@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import json
 import time
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from telco_common.auth import Principal, require_roles
 from telco_common.pagination import Page, PageParams, page_params
 from telco_common.problems import ProblemError
 
+from ..charts import build_charts, fingerprint
 from ..deps import CacheDep, ModelsDep, PoolDep, SettingsDep, fetch, to_json_value
 from ..olap import CURRENT_DIMENSIONS, HISTORY_DIMENSIONS, MEASURES, OlapQuery, build, pivot
 
@@ -127,6 +131,38 @@ async def kpis(_: Viewer, pool: PoolDep, cache: CacheDep, settings: SettingsDep)
 
     value, cached = await cache.get_or_set("kpis", produce)
     return {**value, "cached": cached}
+
+
+# ------------------------------------------------------------------ charts / live stream
+@router.get("/charts", summary="Datasets behind the five dashboard plots")
+async def charts(_: Viewer, pool: PoolDep) -> dict[str, Any]:
+    return await build_charts(pool)
+
+
+@router.get("/stream", summary="Server-sent events: dashboard datasets, pushed whenever the warehouse changes")
+async def stream(request: Request, _: Viewer, pool: PoolDep, interval: Annotated[float, Query(ge=1, le=60)] = 5.0) -> StreamingResponse:
+    async def events() -> Any:
+        last = None
+        idle = 0.0
+        yield "retry: 5000\n\n"
+        while not await request.is_disconnected():
+            try:
+                current = await fingerprint(pool)
+                if current != last:
+                    last = current
+                    idle = 0.0
+                    yield f"event: charts\ndata: {json.dumps(await build_charts(pool), default=str)}\n\n"
+                elif idle >= 15:
+                    idle = 0.0
+                    yield ": keep-alive\n\n"
+            except Exception as exc:  # noqa: BLE001  keep the stream alive across transient DB errors
+                yield f"event: problem\ndata: {json.dumps({'detail': str(exc)[:200]})}\n\n"
+            await asyncio.sleep(interval)
+            idle += interval
+
+    return StreamingResponse(
+        events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"}
+    )
 
 
 # ------------------------------------------------------------------ predictions

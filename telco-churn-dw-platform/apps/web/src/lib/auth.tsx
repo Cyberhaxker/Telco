@@ -1,14 +1,12 @@
 "use client";
 
-// Keycloak login with Authorization Code + PKCE (oidc-client-ts). Tokens live in
-// memory only; after a reload the Keycloak SSO session restores them silently.
-// Offline, the last known profile lets people browse cached data and queue writes.
-import { InMemoryWebStorage, User, UserManager, WebStorageStateStore } from "oidc-client-ts";
+// Sign-in against the web app's own /api/auth routes (bcrypt-checked users, JWT). The httpOnly
+// session cookie proves who you are; short-lived API tokens are fetched from /api/auth/session and
+// kept in memory only. Offline, the last known profile lets people browse cached data and queue writes.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { loadConfig } from "./config";
 import { getState, setState } from "./db";
-import { rolesFromToken, type Role } from "./roles";
+import type { Role } from "./roles";
 
 export type AuthStatus = "loading" | "authenticated" | "offline" | "anonymous";
 
@@ -18,150 +16,126 @@ export interface Profile {
   roles: Role[];
 }
 
+export interface RegisterInput {
+  username: string;
+  name: string;
+  password: string;
+}
+
 export interface AuthContextValue {
   status: AuthStatus;
   profile: Profile | null;
   getToken: () => Promise<string | null>;
-  login: (returnTo?: string) => Promise<void>;
+  /** Resolves to an error message, or null on success. */
+  signIn: (username: string, password: string) => Promise<string | null>;
+  signUp: (input: RegisterInput) => Promise<string | null>;
   logout: () => Promise<void>;
-  completeLogin: () => Promise<string>;
-  getRegistrationUrl: () => Promise<string>;
+}
+
+interface TokenResponse {
+  profile: Profile;
+  accessToken: string;
+  expiresIn: number;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-let manager: UserManager | null = null;
-
-async function getManager(): Promise<UserManager> {
-  if (manager) return manager;
-  const cfg = await loadConfig();
-  const origin = window.location.origin;
-  manager = new UserManager({
-    authority: `${cfg.keycloakUrl}/realms/${cfg.realm}`,
-    client_id: cfg.clientId,
-    redirect_uri: `${origin}/auth/callback`,
-    silent_redirect_uri: `${origin}/silent-renew.html`,
-    post_logout_redirect_uri: `${origin}/login`,
-    response_type: "code",
-    scope: "openid",
-    userStore: new WebStorageStateStore({ store: new InMemoryWebStorage() }),
-    automaticSilentRenew: true,
-    monitorSession: false,
-    silentRequestTimeoutInSeconds: 6,
-  });
-  return manager;
-}
-
-function toProfile(user: User): Profile {
-  const p = user.profile;
-  return {
-    username: String(p.preferred_username ?? p.sub),
-    name: String(p.name ?? p.preferred_username ?? p.sub),
-    roles: rolesFromToken(user.access_token),
-  };
-}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [profile, setProfile] = useState<Profile | null>(null);
-  const userRef = useRef<User | null>(null);
+  const tokenRef = useRef<{ value: string; expiresAt: number } | null>(null);
 
-  const adopt = useCallback(async (user: User | null) => {
-    userRef.current = user;
-    if (user && !user.expired) {
-      const prof = toProfile(user);
-      setProfile(prof);
-      setStatus("authenticated");
-      await setState("profile", prof);
-    }
+  const adopt = useCallback(async (res: TokenResponse) => {
+    tokenRef.current = { value: res.accessToken, expiresAt: Date.now() + res.expiresIn * 1000 };
+    setProfile(res.profile);
+    setStatus("authenticated");
+    await setState("profile", res.profile);
+  }, []);
+
+  /** Fetches a fresh token from the session cookie; null if there's no session. Throws when unreachable. */
+  const refresh = useCallback(async (): Promise<TokenResponse | null> => {
+    const res = await fetch("/api/auth/session", { cache: "no-store", credentials: "same-origin" });
+    if (res.status === 401) return null;
+    if (!res.ok) throw new Error(`session check failed (${res.status})`);
+    return (await res.json()) as TokenResponse;
   }, []);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const mgr = await getManager();
-      mgr.events.addUserLoaded((u) => void adopt(u));
-      mgr.events.addUserSignedOut(() => {
-        userRef.current = null;
+      try {
+        const res = await refresh();
+        if (cancelled) return;
+        if (res) return void (await adopt(res));
         setStatus("anonymous");
-      });
-      const existing = await mgr.getUser();
-      if (existing && !existing.expired) return adopt(existing);
-      if (navigator.onLine && !window.location.pathname.startsWith("/auth/")) {
-        try {
-          const u = await mgr.signinSilent();
-          if (!cancelled) return adopt(u);
-        } catch {
-          // no Keycloak session: fall through
+      } catch {
+        if (cancelled) return;
+        const saved = await getState<Profile>("profile");
+        if (saved && !navigator.onLine) {
+          setProfile(saved);
+          setStatus("offline");
+        } else {
+          setStatus("anonymous");
         }
-      }
-      if (cancelled) return;
-      const saved = await getState<Profile>("profile");
-      if (!navigator.onLine && saved) {
-        setProfile(saved);
-        setStatus("offline");
-      } else {
-        setStatus("anonymous");
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [adopt]);
+  }, [adopt, refresh]);
 
   const getToken = useCallback(async () => {
-    const user = userRef.current;
-    if (!user) return null;
-    if ((user.expires_in ?? 0) > 30) return user.access_token;
+    const t = tokenRef.current;
+    if (t && t.expiresAt - Date.now() > 30_000) return t.value;
     if (!navigator.onLine) return null;
     try {
-      const mgr = await getManager();
-      const renewed = await mgr.signinSilent();
-      await adopt(renewed);
-      return renewed?.access_token ?? null;
+      const res = await refresh();
+      if (!res) {
+        tokenRef.current = null;
+        setStatus("anonymous");
+        return null;
+      }
+      await adopt(res);
+      return res.accessToken;
     } catch {
-      setStatus("anonymous");
       return null;
     }
-  }, [adopt]);
+  }, [adopt, refresh]);
 
-  const login = useCallback(async (returnTo?: string) => {
-    const mgr = await getManager();
-    await mgr.signinRedirect({ state: { returnTo: returnTo ?? "/dashboard" } });
-  }, []);
+  const post = useCallback(
+    async (url: string, body: unknown): Promise<string | null> => {
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify(body),
+        });
+        const json = (await res.json().catch(() => ({}))) as Partial<TokenResponse> & { detail?: string };
+        if (!res.ok) return json.detail ?? `Sign-in failed (${res.status})`;
+        await adopt(json as TokenResponse);
+        return null;
+      } catch {
+        return "Cannot reach the server. Check your connection and try again.";
+      }
+    },
+    [adopt],
+  );
 
-  const getRegistrationUrl = useCallback(async () => {
-    const cfg = await loadConfig();
-    const origin = window.location.origin;
-    const params = new URLSearchParams({
-      client_id: cfg.clientId,
-      response_type: "code",
-      scope: "openid",
-      redirect_uri: `${origin}/auth/callback`,
-    });
-    return `${cfg.keycloakUrl}/realms/${cfg.realm}/protocol/openid-connect/registrations?${params.toString()}`;
-  }, []);
+  const signIn = useCallback((username: string, password: string) => post("/api/auth/login", { username, password }), [post]);
+  const signUp = useCallback((input: RegisterInput) => post("/api/auth/register", input), [post]);
 
   const logout = useCallback(async () => {
-    const mgr = await getManager();
     await setState("profile", null);
-    const user = userRef.current;
-    userRef.current = null;
+    tokenRef.current = null;
     setProfile(null);
     setStatus("anonymous");
-    if (navigator.onLine) await mgr.signoutRedirect({ id_token_hint: user?.id_token });
+    if (navigator.onLine) await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }).catch(() => undefined);
   }, []);
 
-  const completeLogin = useCallback(async () => {
-    const mgr = await getManager();
-    const user = await mgr.signinRedirectCallback();
-    await adopt(user);
-    const state = user.state as { returnTo?: string } | undefined;
-    return state?.returnTo && state.returnTo.startsWith("/") ? state.returnTo : "/dashboard";
-  }, [adopt]);
-
   const value = useMemo(
-    () => ({ status, profile, getToken, login, logout, completeLogin, getRegistrationUrl }),
-    [status, profile, getToken, login, logout, completeLogin, getRegistrationUrl],
+    () => ({ status, profile, getToken, signIn, signUp, logout }),
+    [status, profile, getToken, signIn, signUp, logout],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

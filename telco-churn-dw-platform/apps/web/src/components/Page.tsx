@@ -17,7 +17,7 @@ interface PageProps {
 
 /** Page frame: shell, heading, and role-based access (also enforced by the APIs). */
 export function Page({ title, description, roles, actions, children }: PageProps) {
-  const { status, profile, login } = useAuth();
+  const { status, profile } = useAuth();
 
   if (status === "loading") {
     return (
@@ -33,9 +33,9 @@ export function Page({ title, description, roles, actions, children }: PageProps
           <h1>Sign in to continue</h1>
           <p className="muted">Your session has ended. Sign in with your Telco account to open {title.toLowerCase()}.</p>
           <div>
-            <button type="button" className="btn primary" onClick={() => void login(window.location.pathname + window.location.search)}>
+            <a className="btn primary" href="/login">
               Sign in
-            </button>
+            </a>
           </div>
         </div>
       </AppShell>
@@ -47,7 +47,7 @@ export function Page({ title, description, roles, actions, children }: PageProps
         <div className="panel" style={{ maxWidth: 560 }}>
           <h1>{title}</h1>
           <p>
-            This page needs the <strong>{roles.join(" or ")}</strong> role. Ask an administrator to grant it in Keycloak.
+            This page needs the <strong>{roles.join(" or ")}</strong> role. Ask an administrator to change your role.
           </p>
         </div>
       </AppShell>

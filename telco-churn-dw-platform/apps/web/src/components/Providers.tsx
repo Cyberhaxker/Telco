@@ -29,9 +29,19 @@ function SyncScheduler() {
 
 function ServiceWorkerRegistration() {
   useEffect(() => {
-    if (process.env.NODE_ENV === "production" && "serviceWorker" in navigator) {
+    if (!("serviceWorker" in navigator)) return;
+    if (process.env.NODE_ENV === "production") {
       void navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => undefined);
+      return;
     }
+    // Dev: drop a worker left by an earlier production build on this origin; its cached pages carry that
+    // build's CSP and stale config, which blocks the dev API base.
+    void navigator.serviceWorker.getRegistrations().then(async (regs) => {
+      if (regs.length === 0) return;
+      await Promise.all(regs.map((r) => r.unregister()));
+      await Promise.all((await caches.keys()).map((k) => caches.delete(k)));
+      window.location.reload();
+    });
   }, []);
   return null;
 }

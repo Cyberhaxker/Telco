@@ -20,8 +20,16 @@ const withSerwist = withSerwistInit({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: "export",
+  // Self-contained server for the Docker image (login routes need the Next.js server).
+  output: "standalone",
+  serverExternalPackages: ["bcryptjs", "mysql2"], // traced into node_modules so the seed script can import them
   reactStrictMode: true,
+  compress: false, // keeps the SSE stream (/api/v1/analytics/stream) unbuffered
+  async rewrites() {
+    // In Docker the gateway is reachable as apisix:9080; the browser only talks to this origin.
+    const gateway = process.env.GATEWAY_UPSTREAM;
+    return gateway ? [{ source: "/api/v1/:path*", destination: `http://${gateway}/api/v1/:path*` }] : [];
+  },
   poweredByHeader: false,
   images: { unoptimized: true },
   trailingSlash: false,

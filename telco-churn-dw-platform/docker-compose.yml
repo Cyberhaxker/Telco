@@ -20,8 +20,7 @@ x-py-service: &py-service
   tmpfs: ["/tmp"]
 
 x-oidc-env: &oidc-env
-  OIDC_ISSUER: ${PUBLIC_KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}
-  OIDC_JWKS_URL: http://keycloak:8080/realms/${KEYCLOAK_REALM}/protocol/openid-connect/certs
+  JWT_SECRET: ${JWT_SECRET}
   OIDC_AUDIENCE: telco-api
   LOG_LEVEL: ${LOG_LEVEL}
   ENVIRONMENT: ${ENVIRONMENT}
@@ -213,8 +212,10 @@ services:
   # ======================================================================
   # Identity and gateway
   # ======================================================================
+  # Optional: the web app signs users in itself (bcrypt + JWT); Keycloak only runs with --profile keycloak.
   keycloak:
     image: quay.io/keycloak/keycloak:26.7.5
+    profiles: [keycloak]
     restart: unless-stopped
     logging: *default-logging
     networks: [backend]
@@ -256,15 +257,9 @@ services:
     entrypoint: ["/bin/bash", "/usr/local/apisix/conf/telco/render-and-start.sh"]
     environment:
       APISIX_STAND_ALONE: "true"
-      KEYCLOAK_REALM: ${KEYCLOAK_REALM}
-      PUBLIC_KEYCLOAK_URL: ${PUBLIC_KEYCLOAK_URL}
       PUBLIC_WEB_URL: ${PUBLIC_WEB_URL}
-      KEYCLOAK_GATEWAY_CLIENT_ID: ${KEYCLOAK_GATEWAY_CLIENT_ID}
-      KEYCLOAK_GATEWAY_CLIENT_SECRET: ${KEYCLOAK_GATEWAY_CLIENT_SECRET}
     ports: ["${APISIX_PORT}:9080"]
     volumes: [./infra/apisix:/usr/local/apisix/conf/telco:ro]
-    depends_on:
-      keycloak: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9080 && printf 'GET /healthz HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '200 OK' <&3"]
       interval: 10s
@@ -369,7 +364,7 @@ services:
       dw-postgres: { condition: service_healthy }
 
   # ======================================================================
-  # PWA (static export served by NGINX, /api proxied to APISIX)
+  # PWA: Next.js server (UI + /api/auth login routes); /api/v1 is proxied to APISIX
   # ======================================================================
   web:
     build:
@@ -378,22 +373,34 @@ services:
     image: telco/web:${IMAGE_TAG:-dev}
     restart: unless-stopped
     logging: *default-logging
-    networks: [edge]
+    networks: [edge, backend]
     read_only: true
-    tmpfs: ["/tmp", "/var/cache/nginx", "/var/run"]
-    environment:
-      PUBLIC_KEYCLOAK_URL: ${PUBLIC_KEYCLOAK_URL}
-      KEYCLOAK_REALM: ${KEYCLOAK_REALM}
-      KEYCLOAK_PWA_CLIENT_ID: ${KEYCLOAK_PWA_CLIENT_ID}
-      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL}
-      GATEWAY_UPSTREAM: apisix:9080
+    tmpfs: ["/tmp"]
+    environment: &web-env
+      JWT_SECRET: ${JWT_SECRET}
+      OPS_DB_HOST: mysql
+      OPS_DB_PORT: "3306"
+      OPS_DB: ${OPS_DB}
+      OPS_DB_PASSWORD: ${OPS_APP_PASSWORD}
     ports: ["${WEB_PORT}:8080"]
-    depends_on: [apisix]
+    depends_on:
+      apisix: { condition: service_healthy }
+      mysql: { condition: service_healthy }
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/nginx-health >/dev/null"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/login >/dev/null"]
       interval: 10s
       timeout: 3s
       retries: 10
+
+  # One-shot: creates app_users and one account per role; prints generated passwords in its logs.
+  web-seed:
+    image: telco/web:${IMAGE_TAG:-dev}
+    networks: [backend]
+    restart: "no"
+    environment: *web-env
+    command: ["node", "scripts/seed-users.mjs"]
+    depends_on:
+      mysql: { condition: service_healthy }
 
   # ======================================================================
   # Orchestration (profile: airflow)

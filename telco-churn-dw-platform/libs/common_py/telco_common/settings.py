@@ -18,6 +18,9 @@ class ServiceSettings(BaseSettings):
     oidc_issuer: str = "http://localhost:8081/realms/telco"
     oidc_jwks_url: str = "http://keycloak:8080/realms/telco/protocol/openid-connect/certs"
     oidc_audience: str = "telco-api"
+    # Tokens issued by the web app's own login (HS256). When jwt_secret is set it replaces the OIDC/JWKS check.
+    jwt_secret: str = ""
+    jwt_issuer: str = "telco-web"
     # Disabling auth is only possible outside production and is used by unit tests.
     auth_disabled: bool = False
 
