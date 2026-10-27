@@ -1,5 +1,5 @@
 {
-  "realm": "${KC_REALM}",
+  "realm": "telco",
   "displayName": "Telco Churn Analytics",
   "enabled": true,
   "sslRequired": "external",
@@ -80,7 +80,7 @@
       "directAccessGrantsEnabled": false
     },
     {
-      "clientId": "${KC_PWA_CLIENT_ID}",
+      "clientId": "telco-pwa",
       "name": "Telco Churn PWA",
       "enabled": true,
       "publicClient": true,

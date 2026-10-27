@@ -1,4 +1,4 @@
-# Declarative APISIX routes. Dollar-brace placeholders are substituted from the container
+# Declarative APISIX routes (rate limits, CORS, headers; the services validate the web app's JWT themselves). Dollar-brace placeholders are substituted from the container
 # environment by render-and-start.sh before APISIX starts.
 
 upstreams:
@@ -98,18 +98,6 @@ routes:
     uri: /api/v1/meta/*
     upstream_id: metadata-api
     plugins:
-      openid-connect:
-        client_id: ${KEYCLOAK_GATEWAY_CLIENT_ID}
-        client_secret: ${KEYCLOAK_GATEWAY_CLIENT_SECRET}
-        discovery: http://keycloak:8080/realms/${KEYCLOAK_REALM}/.well-known/openid-configuration
-        realm: ${KEYCLOAK_REALM}
-        bearer_only: true
-        use_jwks: true
-        set_userinfo_header: false
-        set_access_token_header: false
-        set_id_token_header: false
-        ssl_verify: false
-        timeout: 5
       limit-count: { count: 600, time_window: 60, key_type: var, key: remote_addr, rejected_code: 429, policy: local, show_limit_quota_header: true }
       cors:
         allow_origins: ${PUBLIC_WEB_URL}
@@ -126,18 +114,6 @@ routes:
     methods: [POST, OPTIONS]
     upstream_id: ingestion-api
     plugins:
-      openid-connect:
-        client_id: ${KEYCLOAK_GATEWAY_CLIENT_ID}
-        client_secret: ${KEYCLOAK_GATEWAY_CLIENT_SECRET}
-        discovery: http://keycloak:8080/realms/${KEYCLOAK_REALM}/.well-known/openid-configuration
-        realm: ${KEYCLOAK_REALM}
-        bearer_only: true
-        use_jwks: true
-        set_userinfo_header: false
-        set_access_token_header: false
-        set_id_token_header: false
-        ssl_verify: false
-        timeout: 5
       limit-count: { count: 20, time_window: 60, key_type: var, key: remote_addr, rejected_code: 429, policy: local, show_limit_quota_header: true }
       client-control: { max_body_size: 10485760 }
       cors:
@@ -152,18 +128,6 @@ routes:
     uri: /api/v1/ingest/*
     upstream_id: ingestion-api
     plugins:
-      openid-connect:
-        client_id: ${KEYCLOAK_GATEWAY_CLIENT_ID}
-        client_secret: ${KEYCLOAK_GATEWAY_CLIENT_SECRET}
-        discovery: http://keycloak:8080/realms/${KEYCLOAK_REALM}/.well-known/openid-configuration
-        realm: ${KEYCLOAK_REALM}
-        bearer_only: true
-        use_jwks: true
-        set_userinfo_header: false
-        set_access_token_header: false
-        set_id_token_header: false
-        ssl_verify: false
-        timeout: 5
       limit-count: { count: 120, time_window: 60, key_type: var, key: remote_addr, rejected_code: 429, policy: local, show_limit_quota_header: true }
       client-control: { max_body_size: 6291456 }
       cors:
@@ -180,18 +144,6 @@ routes:
     methods: [GET, OPTIONS]
     upstream_id: analytics-api
     plugins:
-      openid-connect:
-        client_id: ${KEYCLOAK_GATEWAY_CLIENT_ID}
-        client_secret: ${KEYCLOAK_GATEWAY_CLIENT_SECRET}
-        discovery: http://keycloak:8080/realms/${KEYCLOAK_REALM}/.well-known/openid-configuration
-        realm: ${KEYCLOAK_REALM}
-        bearer_only: true
-        use_jwks: true
-        set_userinfo_header: false
-        set_access_token_header: false
-        set_id_token_header: false
-        ssl_verify: false
-        timeout: 5
       limit-count: { count: 600, time_window: 60, key_type: var, key: remote_addr, rejected_code: 429, policy: local, show_limit_quota_header: true }
       proxy-cache:
         cache_strategy: memory
@@ -214,18 +166,6 @@ routes:
     methods: [POST]
     upstream_id: analytics-api
     plugins:
-      openid-connect:
-        client_id: ${KEYCLOAK_GATEWAY_CLIENT_ID}
-        client_secret: ${KEYCLOAK_GATEWAY_CLIENT_SECRET}
-        discovery: http://keycloak:8080/realms/${KEYCLOAK_REALM}/.well-known/openid-configuration
-        realm: ${KEYCLOAK_REALM}
-        bearer_only: true
-        use_jwks: true
-        set_userinfo_header: false
-        set_access_token_header: false
-        set_id_token_header: false
-        ssl_verify: false
-        timeout: 5
       limit-count: { count: 300, time_window: 60, key_type: var, key: remote_addr, rejected_code: 429, policy: local, show_limit_quota_header: true }
       client-control: { max_body_size: 65536 }
       cors:

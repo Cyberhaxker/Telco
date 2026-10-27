@@ -54,7 +54,7 @@ export default function AdminPage() {
       )}
       <section className="panel">
         <h2>Roles</h2>
-        <p className="small muted">Roles are managed in Keycloak (realm “telco”). You have: {profile?.roles.join(", ") || "none"}.</p>
+        <p className="small muted">Roles are stored per user in the app_users table (telco_ops). You have: {profile?.roles.join(", ") || "none"}.</p>
         <div className="table-wrap" style={{ maxHeight: "none" }}>
           <table>
             <caption className="sr-only">Roles and permissions</caption>

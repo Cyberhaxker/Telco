@@ -86,3 +86,12 @@ export async function apiPostCached<T>(path: string, body: unknown, getToken: To
 }
 
 export { request as rawRequest };
+
+/** Open an authenticated streaming GET (server-sent events). The caller owns the abort signal. */
+export async function apiStream(path: string, getToken: TokenFn, signal: AbortSignal): Promise<Response> {
+  const cfg = await loadConfig();
+  const token = await getToken();
+  const headers = new Headers({ Accept: "text/event-stream" });
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  return fetch(`${cfg.apiBase}${path}`, { headers, signal, cache: "no-store" });
+}

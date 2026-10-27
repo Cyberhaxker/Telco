@@ -1,1 +1,1 @@
-{ "keycloakUrl": "http://localhost:8081", "realm": "telco", "clientId": "telco-pwa", "apiBase": "/api/v1", "environment": "dev" }
+{ "apiBase": "/api/v1", "environment": "dev" }

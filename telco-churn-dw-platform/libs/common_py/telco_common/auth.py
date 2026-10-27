@@ -1,8 +1,9 @@
-"""JWT validation (defence in depth behind APISIX) and role guards.
+"""JWT validation (defence in depth behind the gateway) and role guards.
 
-APISIX already rejects requests without a valid Keycloak token; every service
-validates the token again (signature, issuer, audience, expiry) and enforces
-realm roles with dependency-injected guards.
+Tokens are issued by the web app's login (bcrypt-checked users, HS256 JWT signed
+with the shared JWT_SECRET). Without JWT_SECRET the services fall back to validating
+RS256 tokens from an OIDC provider's JWKS. Every service validates the token
+(signature, issuer, audience, expiry) and enforces roles with dependency-injected guards.
 """
 
 from __future__ import annotations
@@ -41,18 +42,32 @@ class TokenVerifier:
         self.settings = settings
         self._jwks = PyJWKClient(settings.oidc_jwks_url, cache_keys=True, lifespan=600, timeout=5)
 
-    def verify(self, token: str) -> Principal:
-        try:
-            signing_key = self._jwks.get_signing_key_from_jwt(token)
-            claims = jwt.decode(
+    def _decode(self, token: str) -> dict[str, Any]:
+        s = self.settings
+        if s.jwt_secret:
+            return jwt.decode(
                 token,
-                signing_key.key,
-                algorithms=["RS256", "RS384", "RS512", "PS256"],
-                audience=self.settings.oidc_audience,
-                issuer=self.settings.oidc_issuer,
+                s.jwt_secret,
+                algorithms=["HS256"],
+                audience=s.oidc_audience,
+                issuer=s.jwt_issuer,
                 options={"require": ["exp", "iat", "iss", "sub"]},
                 leeway=30,
             )
+        signing_key = self._jwks.get_signing_key_from_jwt(token)
+        return jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["RS256", "RS384", "RS512", "PS256"],
+            audience=s.oidc_audience,
+            issuer=s.oidc_issuer,
+            options={"require": ["exp", "iat", "iss", "sub"]},
+            leeway=30,
+        )
+
+    def verify(self, token: str) -> Principal:
+        try:
+            claims = self._decode(token)
         except jwt.ExpiredSignatureError as exc:
             raise _unauthorized("Token expired") from exc
         except jwt.PyJWKClientError as exc:
@@ -60,7 +75,8 @@ class TokenVerifier:
             raise _unauthorized("Unable to verify token signature") from exc
         except jwt.InvalidTokenError as exc:
             raise _unauthorized(f"Invalid token: {exc}") from exc
-        roles = frozenset(r for r in claims.get("realm_access", {}).get("roles", []) if r in ROLES)
+        raw_roles = claims.get("roles") or claims.get("realm_access", {}).get("roles", [])
+        roles = frozenset(r for r in raw_roles if r in ROLES)
         return Principal(
             subject=claims["sub"],
             username=claims.get("preferred_username", claims["sub"]),

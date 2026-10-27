@@ -1,15 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
 
-import { Chart } from "@/components/Chart";
+import { ChargesHistogram, ContractInternetHeatmap, PaymentBars, RiskDonut, TenureLine, type ChartsPayload } from "@/components/DwCharts";
 import { Page } from "@/components/Page";
 import { CacheNote, Problem } from "@/components/Problem";
-import { apiGetCached } from "@/lib/api";
+import { apiGetCached, apiJson, apiStream } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { fmtInt, fmtMoney, fmtPct, fmtWhen } from "@/lib/format";
-import { useAsync } from "@/lib/hooks";
+import { useAsync, useEventStream } from "@/lib/hooks";
 import { hasRole } from "@/lib/roles";
 
 interface Breakdown {
@@ -64,24 +63,18 @@ function BreakdownTable({ rows, caption }: { rows: Breakdown[]; caption: string 
 }
 
 export default function DashboardPage() {
-  const { getToken, status, profile, getRegistrationUrl } = useAuth();
+  const { getToken, status, profile } = useAuth();
   const ready = status === "authenticated" || status === "offline";
   const kpis = useAsync(() => apiGetCached<Kpis>("/analytics/kpis", getToken), [], ready);
   const k = kpis.data;
 
-  const handleRegister = async () => {
-    const url = await getRegistrationUrl();
-    window.location.href = url;
-  };
-
-  const charts = useMemo(() => {
-    if (!k) return null;
-    const mk = (rows: Breakdown[]) => ({
-      categories: rows.map((r) => r.label),
-      series: [{ name: "Churn rate", values: rows.map((r) => r.churn_rate_pct), tone: "signal" as const }],
-    });
-    return { contract: mk(k.churn_by_contract), tenure: mk(k.churn_by_tenure_band), payment: mk(k.churn_by_payment_method) };
-  }, [k]);
+  const live = useEventStream<ChartsPayload>(
+    (signal) => apiStream("/analytics/stream?interval=5", getToken, signal),
+    "charts",
+    () => apiJson<ChartsPayload>("/analytics/charts", { method: "GET" }, getToken),
+    ready,
+  );
+  const charts = live.data;
   const isAnalyst = hasRole(profile?.roles ?? [], ["analyst"]);
 
   return (
@@ -91,21 +84,25 @@ export default function DashboardPage() {
       roles={["viewer", "analyst"]}
       actions={
         <>
+          <span className={`small ${live.status === "live" ? "" : "muted"}`} role="status">
+            {live.status === "live" ? "● Live from warehouse" : live.status === "polling" ? "Stream unavailable – polling" : "Connecting…"}
+            {live.updatedAt ? ` · ${fmtWhen(live.updatedAt)}` : ""}
+          </span>
           <CacheNote fromCache={kpis.fromCache} fetchedAt={kpis.fetchedAt} />
           <button type="button" className="btn small" onClick={kpis.reload} disabled={kpis.loading}>
             {kpis.loading ? "Refreshing…" : "Refresh"}
           </button>
           {!ready && (
-            <button type="button" className="btn small secondary" onClick={handleRegister}>
-              Register New Account
-            </button>
+            <a className="btn small secondary" href="/login">
+              Sign in
+            </a>
           )}
         </>
       }
     >
       <Problem error={k ? null : kpis.error} />
       {!k && kpis.loading && <div className="empty">Loading churn KPIs…</div>}
-      {k && charts && (
+      {k && (
         <>
           <section className="kpis" aria-label="Key figures">
             <div className="kpi">
@@ -136,28 +133,47 @@ export default function DashboardPage() {
           <div className="grid-2">
             <section className="panel">
               <div className="panel-head">
-                <h2>Churn rate by contract</h2>
-                <span className="small muted">Month-to-month customers leave most often</span>
+                <h2>Churn by contract and internet service</h2>
+                <span className="small muted">Stronger colour = higher churn rate</span>
               </div>
-              <Chart label="Churn rate by contract type" unit="%" {...charts.contract} />
-              <BreakdownTable rows={k.churn_by_contract} caption="Churn by contract type" />
+              {charts ? <ContractInternetHeatmap data={charts.contract_internet} /> : <div className="empty">Loading…</div>}
             </section>
             <section className="panel">
               <div className="panel-head">
                 <h2>Churn rate by tenure</h2>
                 <span className="small muted">Months with the company</span>
               </div>
-              <Chart label="Churn rate by tenure band in months" unit="%" {...charts.tenure} />
+              {charts ? <TenureLine data={charts.tenure} /> : <div className="empty">Loading…</div>}
               <BreakdownTable rows={k.churn_by_tenure_band} caption="Churn by tenure band" />
             </section>
+            <section className="panel">
+              <div className="panel-head">
+                <h2>Churn rate by payment method</h2>
+                {isAnalyst && <Link href="/olap" className="small">Explore in OLAP →</Link>}
+              </div>
+              {charts ? <PaymentBars data={charts.payment} /> : <div className="empty">Loading…</div>}
+            </section>
+            <section className="panel">
+              <div className="panel-head">
+                <h2>Monthly charges: retained vs churned</h2>
+                <span className="small muted">Customers per $10 band</span>
+              </div>
+              {charts ? <ChargesHistogram data={charts.charges} /> : <div className="empty">Loading…</div>}
+            </section>
           </div>
+          <div className="grid-2">
           <section className="panel">
             <div className="panel-head">
-              <h2>Churn rate by payment method</h2>
-              {isAnalyst && <Link href="/olap" className="small">Explore in OLAP →</Link>}
+              <h2>Active customers by churn risk</h2>
+              <span className="small muted">Champion model, scored {fmtWhen(k.scored_at)}</span>
             </div>
-            <Chart label="Churn rate by payment method" unit="%" horizontal {...charts.payment} />
+            {charts ? <RiskDonut data={charts.risk} /> : <div className="empty">Loading…</div>}
           </section>
+            <section className="panel">
+              <div className="panel-head"><h2>Churn by contract type</h2></div>
+              <BreakdownTable rows={k.churn_by_contract} caption="Churn by contract type" />
+            </section>
+          </div>
         </>
       )}
     </Page>
